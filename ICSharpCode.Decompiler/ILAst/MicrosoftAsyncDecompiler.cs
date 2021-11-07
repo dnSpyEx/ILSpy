@@ -615,8 +615,10 @@ namespace ICSharpCode.Decompiler.ILAst {
 				AddYieldOffset(newBody, newBody.Count - 3, 3, targetStateID);
 				newBody.RemoveRange(newBody.Count - 3, 3); // remove awaiter field assignment
 			}
-			else
-				Debug.Fail("Couldn't find new async state machine state");
+            else if (!context.Settings.ForceIgnoreAll)
+            {
+                Debug.Fail("Couldn't find new async state machine state");
+            }
 		}
 		#endregion
 

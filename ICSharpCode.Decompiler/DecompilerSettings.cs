@@ -557,6 +557,18 @@ namespace ICSharpCode.Decompiler {
 		}
 		bool hexadecimalNumbers = false;
 
+        public bool ForceIgnoreAll
+        {
+            get { return forceIgnoreAll; }
+            set {
+                if (forceIgnoreAll != value) {
+                    forceIgnoreAll = value;
+                    OnPropertyChanged(nameof(ForceIgnoreAll));
+                }
+            }
+        }
+        bool forceIgnoreAll = true;
+
 		CSharpFormattingOptions csharpFormattingOptions;
 
 		public CSharpFormattingOptions CSharpFormattingOptions {

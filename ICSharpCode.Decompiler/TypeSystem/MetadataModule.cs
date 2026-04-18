@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -259,7 +259,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				return new MetadataProperty(this, handle);
 			uint row = handle.Rid;
 			Debug.Assert(row != 0);
-			if (row >= methodDefs.Length)
+			if (row >= propertyDefs.Length)
 				HandleOutOfRange(handle);
 			var property = LazyInit.VolatileRead(ref propertyDefs[row]);
 			if (property != null)
@@ -276,7 +276,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				return new MetadataEvent(this, handle);
 			uint row = handle.Rid;
 			Debug.Assert(row != 0);
-			if (row >= methodDefs.Length)
+			if (row >= eventDefs.Length)
 				HandleOutOfRange(handle);
 			var ev = LazyInit.VolatileRead(ref eventDefs[row]);
 			if (ev != null)
@@ -438,6 +438,8 @@ namespace ICSharpCode.Decompiler.TypeSystem
 					method = null;
 					foreach (var m in methods) {
 						if (m.TypeParameters.Count != ((dnlib.DotNet.IMethod)memberRef).NumberOfGenericParameters)
+							continue;
+						if (memberRef.HasThis != !m.IsStatic)
 							continue;
 						if (CompareSignatures(m.Parameters, parameterTypes) && CompareTypes(m.ReturnType, returnType)) {
 							method = m;

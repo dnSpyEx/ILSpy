@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -53,14 +53,14 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 		{
 			var b = new AttributeListBuilder(module);
 
-			bool defaultValueAssignmentAllowed = ReferenceKind is ReferenceKind.None or ReferenceKind.In or ReferenceKind.RefReadOnly;
+			bool defaultValueAssignmentAllowed = this.IsDefaultValueAssignmentAllowed();
 
-			if (IsOptional && (!defaultValueAssignmentAllowed || !HasConstantValueInSignature))
+			if (IsOptional && !defaultValueAssignmentAllowed)
 			{
 				b.Add(KnownAttribute.Optional);
 			}
 
-			if (!(IsDecimalConstant || !HasConstantValueInSignature) && (!defaultValueAssignmentAllowed || !IsOptional))
+			if (!IsDecimalConstant && HasConstantValueInSignature && !defaultValueAssignmentAllowed)
 			{
 				b.Add(KnownAttribute.DefaultParameterValue, KnownTypeCode.Object, GetConstantValue(throwOnInvalidMetadata: false));
 			}
@@ -114,6 +114,12 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 				if (!handle.HasParamDef)
 					return default;
 
+				if ((module.TypeSystemOptions & TypeSystemOptions.ParamsCollections) != 0
+					&& handle.ParamDef.CustomAttributes.HasKnownAttribute(KnownAttribute.ParamCollection))
+				{
+					// params collections are implicitly scoped
+					return default;
+				}
 				if (handle.ParamDef.CustomAttributes.HasKnownAttribute(KnownAttribute.ScopedRef))
 				{
 					return new LifetimeAnnotation { ScopedRef = true };
@@ -124,11 +130,20 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 
 		public bool IsParams {
 			get {
-				if (Type.Kind != TypeKind.Array)
-					return false;
-				if (!handle.HasParamDef)
-					return false;
-				return handle.ParamDef.CustomAttributes.HasKnownAttribute(KnownAttribute.ParamArray);
+
+				if (Type.Kind == TypeKind.Array)
+				{
+					if (!handle.HasParamDef)
+						return false;
+					return handle.ParamDef.CustomAttributes.HasKnownAttribute(KnownAttribute.ParamArray);
+				}
+				if (module.TypeSystemOptions.HasFlag(TypeSystemOptions.ParamsCollections))
+				{
+					if (!handle.HasParamDef)
+						return false;
+					return handle.ParamDef.CustomAttributes.HasKnownAttribute(KnownAttribute.ParamCollection);
+				}
+				return false;
 			}
 		}
 

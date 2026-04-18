@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2011-2017 Daniel Grunwald
+// Copyright (c) 2011-2017 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -333,16 +333,26 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 						throw new InvalidOperationException("invalid expression classification");
 				}
 			}
-			else if (IsPassedToReadOnlySpanOfCharCtor(loadInst))
+			else if (loadInst.Parent is LdElemaInlineArray)
+			{
+				return true;
+			}
+			else if (IsPassedToReadOnlySpanCtor(loadInst))
 			{
 				// Always inlining is possible here, because it's an 'in' or 'ref readonly' parameter
 				// and the C# compiler allows calling it with an rvalue, even though that might produce
 				// a warning. Note that we don't need to check the expression classification, because
 				// expressionBuilder.VisitAddressOf will handle creating the copy for us.
 				// This is necessary, because there are compiler-generated uses of this ctor when
-				// concatenating a string to a char and our following transforms assume the char is
-				// already inlined.
+				// passing a single-element array to a params ROS<T> parameter and our following transforms
+				// assume the value is already inlined.
 				return true;
+			}
+			else if (IsPassedToInlineArrayAsSpan(loadInst))
+			{
+				// Inlining is not allowed:
+				// <PrivateImplementationDetails>.InlineArrayAsReadOnlySpan(GetInlineArray()) is invalid C# code
+				return false;
 			}
 			else if (IsPassedToInParameter(loadInst))
 			{
@@ -375,6 +385,20 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			{
 				return false;
 			}
+		}
+
+		private static bool IsPassedToInlineArrayAsSpan(LdLoca loadInst)
+		{
+			if (loadInst.Parent is not Call call)
+				return false;
+			var method = call.Method;
+			var declaringType = method.DeclaringType;
+			return declaringType.ReflectionName == "<PrivateImplementationDetails>"
+				&& method.Name is "InlineArrayAsReadOnlySpan" or "InlineArrayAsSpan"
+				&& method.Parameters is [var arg, var length]
+				&& (method.ReturnType.IsKnownType(KnownTypeCode.SpanOfT) || method.ReturnType.IsKnownType(KnownTypeCode.ReadOnlySpanOfT))
+				&& arg.Type is ByReferenceType
+				&& length.Type.IsKnownType(KnownTypeCode.Int32);
 		}
 
 		internal static bool MethodRequiresCopyForReadonlyLValue(IMethod method, IType constrainedTo = null)
@@ -468,13 +492,16 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			return call.GetParameter(ldloca.ChildIndex)?.ReferenceKind is ReferenceKind.In;
 		}
 
-		static bool IsPassedToReadOnlySpanOfCharCtor(LdLoca ldloca)
+		static bool IsPassedToReadOnlySpanCtor(LdLoca ldloca)
 		{
 			if (ldloca.Parent is not NewObj call)
 			{
 				return false;
 			}
-			return IsReadOnlySpanCharCtor(call.Method);
+			var method = call.Method;
+			return method.IsConstructor
+				&& method.Parameters.Count == 1
+				&& method.DeclaringType.IsKnownType(KnownTypeCode.ReadOnlySpanOfT);
 		}
 
 		internal static bool IsReadOnlySpanCharCtor(IMethod method)
@@ -794,46 +821,27 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 				return FindResult.Stop;
 			if (expr.MatchLdLoc(v) || expr.MatchLdLoca(v))
 			{
-				// Match found, we can inline
-				if (expr.SlotInfo == StObj.TargetSlot && !((StObj)expr.Parent).CanInlineIntoTargetSlot(expressionBeingMoved))
+				// Match found, we can inline unless there are slot restrictions.
+				if (expr.Parent.SatisfiesSlotRestrictionForInlining(expr.ChildIndex, expressionBeingMoved))
 				{
-					if ((options & InliningOptions.AllowChangingOrderOfEvaluationForExceptions) != 0)
-					{
-						// Intentionally change code semantics so that we can avoid a ref local
-						if (expressionBeingMoved is LdFlda ldflda)
-							ldflda.DelayExceptions = true;
-						else if (expressionBeingMoved is LdElema ldelema)
-							ldelema.DelayExceptions = true;
-					}
-					else
-					{
-						// special case: the StObj.TargetSlot does not accept some kinds of expressions
-						return FindResult.Stop;
-					}
+					return FindResult.Found(expr);
 				}
-				return FindResult.Found(expr);
+				// We cannot inline because the targets slot restrictions are not satisfied
+				if ((options & InliningOptions.AllowChangingOrderOfEvaluationForExceptions) != 0 && expr.SlotInfo == StObj.TargetSlot)
+				{
+					// Special case: inlining will change code semantics,
+					// but we accept that so that we can avoid a ref local.
+					if (expressionBeingMoved is LdFlda ldflda)
+						ldflda.DelayExceptions = true;
+					else if (expressionBeingMoved is LdElema ldelema)
+						ldelema.DelayExceptions = true;
+					return FindResult.Found(expr);
+				}
+				return FindResult.Stop;
 			}
-			else if (expr is Block block)
+			else if (expr is Block { Kind: BlockKind.CallWithNamedArgs } block)
 			{
-				// Inlining into inline-blocks?
-				switch (block.Kind)
-				{
-					case BlockKind.ControlFlow when block.Parent is BlockContainer:
-					case BlockKind.ArrayInitializer:
-					case BlockKind.CollectionInitializer:
-					case BlockKind.ObjectInitializer:
-					case BlockKind.CallInlineAssign:
-						// Allow inlining into the first instruction of the block
-						if (block.Instructions.Count == 0)
-							return FindResult.Stop;
-						return NoContinue(FindLoadInNext(block.Instructions[0], v, expressionBeingMoved, options));
-					// If FindLoadInNext() returns null, we still can't continue searching
-					// because we can't inline over the remainder of the block.
-					case BlockKind.CallWithNamedArgs:
-						return NamedArgumentTransform.CanExtendNamedArgument(block, v, expressionBeingMoved);
-					default:
-						return FindResult.Stop;
-				}
+				return NamedArgumentTransform.CanExtendNamedArgument(block, v, expressionBeingMoved);
 			}
 			else if (options.HasFlag(InliningOptions.FindDeconstruction) && expr is DeconstructInstruction di)
 			{
@@ -857,14 +865,6 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 				return FindResult.Continue; // continue searching
 			else
 				return FindResult.Stop; // abort, inlining not possible
-		}
-
-		private static FindResult NoContinue(FindResult findResult)
-		{
-			if (findResult.Type == FindResultType.Continue)
-				return FindResult.Stop;
-			else
-				return findResult;
 		}
 
 		/// <summary>

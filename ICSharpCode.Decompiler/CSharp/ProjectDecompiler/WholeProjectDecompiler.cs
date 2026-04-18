@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2016 Daniel Grunwald
+// Copyright (c) 2016 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -67,6 +67,8 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 				languageVersion = value;
 			}
 		}
+
+		bool IProjectInfoProvider.CheckForOverflowUnderflow => Settings.CheckForOverflowUnderflow;
 
 		public IAssemblyResolver AssemblyResolver { get; }
 
@@ -204,7 +206,7 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 			}
 		}
 
-		CSharpDecompiler CreateDecompiler(DecompilerTypeSystem ts)
+		protected virtual CSharpDecompiler CreateDecompiler(DecompilerTypeSystem ts)
 		{
 			var decompiler = new CSharpDecompiler(ts, Settings);
 			decompiler.DebugInfoProvider = DebugInfoProvider;
@@ -337,6 +339,9 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 			foreach (var r in module.Resources.Where(r => r.ResourceType == ResourceType.Embedded))
 			{
 				Stream stream = r.TryOpenStream();
+				if (stream == null)
+					continue;
+
 				stream.Position = 0;
 
 				if (r.Name.EndsWith(".resources", StringComparison.OrdinalIgnoreCase))
@@ -687,18 +692,23 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 			}
 			// Whitelist allowed characters, replace everything else:
 			StringBuilder b = new StringBuilder(text.Length + (extension?.Length ?? 0));
+			bool countBytes = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 			foreach (var c in text)
 			{
-				currentSegmentLength++;
 				if (char.IsLetterOrDigit(c) || c == '-' || c == '_')
 				{
+					unsafe
+					{
+						currentSegmentLength += countBytes ? Encoding.UTF8.GetByteCount(&c, 1) : 1;
+					}
 					// if the current segment exceeds maxSegmentLength characters,
 					// skip until the end of the segment.
 					if (currentSegmentLength <= maxSegmentLength)
 						b.Append(c);
 				}
-				else if (c == '.' && b.Length > 0 && b[b.Length - 1] != '.')
+				else if (c == '.' && b.Length > 0 && b[^1] != '.')
 				{
+					currentSegmentLength++;
 					// if the current segment exceeds maxSegmentLength characters,
 					// skip until the end of the segment.
 					if (separateAtDots || currentSegmentLength <= maxSegmentLength)
@@ -708,7 +718,7 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 					if (separateAtDots)
 						currentSegmentLength = 0;
 				}
-				else if (treatAsPath && (c is '/' or '\\') && currentSegmentLength > 1)
+				else if (treatAsPath && (c is '/' or '\\') && currentSegmentLength > 0)
 				{
 					// if we treat this as a file name, we've started a new segment
 					b.Append(Path.DirectorySeparatorChar);
@@ -716,6 +726,13 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 				}
 				else
 				{
+					if (char.IsHighSurrogate(c))
+					{
+						// only add one replacement character for surrogate pairs
+						continue;
+					}
+
+					currentSegmentLength++;
 					// if the current segment exceeds maxSegmentLength characters,
 					// skip until the end of the segment.
 					if (currentSegmentLength <= maxSegmentLength)

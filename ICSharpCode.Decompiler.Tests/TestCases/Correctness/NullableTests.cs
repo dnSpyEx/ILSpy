@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2017 Daniel Grunwald
+// Copyright (c) 2017 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -90,7 +90,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 			if (!b)
 				throw new InvalidOperationException();
 		}
-
 
 		static T GetValue<T>()
 		{

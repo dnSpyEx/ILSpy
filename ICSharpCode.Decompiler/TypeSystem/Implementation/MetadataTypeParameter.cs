@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -105,6 +105,7 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 		public override bool HasDefaultConstructorConstraint => (attr & GenericParamAttributes.DefaultConstructorConstraint) != 0;
 		public override bool HasReferenceTypeConstraint => (attr & GenericParamAttributes.ReferenceTypeConstraint) != 0;
 		public override bool HasValueTypeConstraint => (attr & GenericParamAttributes.NotNullableValueTypeConstraint) != 0;
+		public override bool AllowsRefLikeType => (attr & GenericParamAttributes.AllowByRefLike) != 0;
 
 		public override bool HasUnmanagedConstraint {
 			get {

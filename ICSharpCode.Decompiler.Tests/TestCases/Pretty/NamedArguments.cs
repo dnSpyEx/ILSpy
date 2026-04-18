@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -28,6 +28,34 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 
 			internal ClassWithNamedArgCtor()
 				: this(arg2: Get(1) != 1, arg1: Get(2) == 2)
+			{
+			}
+		}
+
+		private class MustNotUseNamedArgsInCtor
+		{
+			public MustNotUseNamedArgsInCtor(string start = "", bool enable = false)
+			{
+			}
+
+			public MustNotUseNamedArgsInCtor(bool enable, string start = "")
+			{
+			}
+
+			public static MustNotUseNamedArgsInCtor Use()
+			{
+				// second overload
+				MustNotUseNamedArgsInCall(true);
+				// first overload
+				MustNotUseNamedArgsInCall();
+				return new MustNotUseNamedArgsInCtor(true);
+			}
+
+			public static void MustNotUseNamedArgsInCall(string start = "", bool enable = false)
+			{
+			}
+
+			public static void MustNotUseNamedArgsInCall(bool enable, string start = "")
 			{
 			}
 		}

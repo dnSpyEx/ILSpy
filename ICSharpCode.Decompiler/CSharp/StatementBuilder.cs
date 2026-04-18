@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2014 Daniel Grunwald
+// Copyright (c) 2014 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -24,8 +24,6 @@ using System.Threading;
 
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.CSharp.Syntax.PatternMatching;
-using ICSharpCode.Decompiler.CSharp.Transforms;
-using ICSharpCode.Decompiler.CSharp.TypeSystem;
 using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.IL.Transforms;
 using ICSharpCode.Decompiler.Semantics;
@@ -61,6 +59,7 @@ namespace ICSharpCode.Decompiler.CSharp
 				decompilationContext,
 				currentFunction,
 				settings,
+				decompileRun,
 				cancellationToken
 			);
 			this.currentFunction = currentFunction;
@@ -553,7 +552,7 @@ namespace ICSharpCode.Decompiler.CSharp
 				var.Kind = VariableKind.Local;
 				var disposeVariable = currentFunction.RegisterVariable(
 					VariableKind.Local, disposeType,
-					AssignVariableNames.GenerateVariableName(currentFunction, disposeType)
+					AssignVariableNames.GenerateVariableName(currentFunction, disposeType, decompileRun.UsingScope)
 				);
 				Expression disposeInvocation = new InvocationExpression(new MemberReferenceExpression(exprBuilder.ConvertVariable(disposeVariable).Expression, disposeTypeMethodName));
 				if (inst.IsAsync)
@@ -618,12 +617,8 @@ namespace ICSharpCode.Decompiler.CSharp
 					if (!m.Success)
 						return null;
 					// Validate that the invocation is an extension method invocation.
-					var context = new CSharpTypeResolveContext(
-						typeSystem.MainModule,
-						decompileRun.UsingScope.Resolve(typeSystem)
-					);
-					if (!IntroduceExtensionMethods.CanTransformToExtensionMethodCall(context,
-						(InvocationExpression)resource))
+					if (!(resource.GetSymbol() is IMethod method
+						&& exprBuilder.resolver.CanTransformToExtensionMethodCall(method, true)))
 					{
 						return null;
 					}
@@ -718,12 +713,12 @@ namespace ICSharpCode.Decompiler.CSharp
 					if (foreachVariable.Type.Kind != TypeKind.Dynamic)
 						foreachVariable.Type = type;
 					foreachVariable.Kind = VariableKind.ForeachLocal;
-					foreachVariable.Name = AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>(), foreachVariable);
+					foreachVariable.Name = AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>(), decompileRun.UsingScope, foreachVariable);
 					break;
 				case RequiredGetCurrentTransformation.IntroduceNewVariable:
 					foreachVariable = currentFunction.RegisterVariable(
 						VariableKind.ForeachLocal, type,
-						AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>())
+						AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>(), decompileRun.UsingScope)
 					);
 					instToReplace.ReplaceWith(new LdLoc(foreachVariable));
 					body.Instructions.Insert(0, new StLoc(foreachVariable, instToReplace));
@@ -731,11 +726,11 @@ namespace ICSharpCode.Decompiler.CSharp
 				case RequiredGetCurrentTransformation.IntroduceNewVariableAndLocalCopy:
 					foreachVariable = currentFunction.RegisterVariable(
 						VariableKind.ForeachLocal, type,
-						AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>())
+						AssignVariableNames.GenerateForeachVariableName(currentFunction, collectionExpr.Annotation<ILInstruction>(), decompileRun.UsingScope)
 					);
 					var localCopyVariable = currentFunction.RegisterVariable(
 						VariableKind.Local, type,
-						AssignVariableNames.GenerateVariableName(currentFunction, type)
+						AssignVariableNames.GenerateVariableName(currentFunction, type, decompileRun.UsingScope)
 					);
 					instToReplace.Parent.ReplaceWith(new LdLoca(localCopyVariable));
 					body.Instructions.Insert(0, new StLoc(localCopyVariable, new LdLoc(foreachVariable)));
@@ -1547,6 +1542,33 @@ namespace ICSharpCode.Decompiler.CSharp
 			);
 			stmt.InsertChildAfter(null, new Comment(" IL cpblk instruction"), Roles.Comment);
 			return stmt.WithILInstruction(inst);
+		}
+
+		protected internal override TranslatedStatement VisitCkfinite(Ckfinite inst)
+		{
+			var isFiniteCall = new InvocationExpression {
+				Target = new MemberReferenceExpression {
+					Target = new TypeReferenceExpression(new Syntax.PrimitiveType("float")),
+					MemberName = "IsFinite"
+				},
+				Arguments = {
+					exprBuilder.Translate(inst.Argument)
+				}
+			};
+			var arithmeticException = typeSystem.FindType(typeof(ArithmeticException));
+			var arithmeticExceptionSyntax = new SimpleType("ArithmeticException");
+			arithmeticExceptionSyntax.AddAnnotation(new TypeResolveResult(arithmeticException));
+			return new IfElseStatement {
+				Condition = new UnaryOperatorExpression {
+					Operator = UnaryOperatorType.Not,
+					Expression = isFiniteCall
+				},
+				TrueStatement = new ThrowStatement(
+					new ObjectCreateExpression {
+						Type = arithmeticExceptionSyntax
+					}
+				),
+			}.WithILInstruction(inst);
 		}
 	}
 }

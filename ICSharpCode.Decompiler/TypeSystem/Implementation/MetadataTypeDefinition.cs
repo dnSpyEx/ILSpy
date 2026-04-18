@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -37,6 +37,7 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 		// eagerly loaded:
 		readonly FullTypeName fullTypeName;
 		readonly TypeAttributes attributes;
+
 		public TypeKind Kind { get; }
 		public bool IsByRefLike { get; }
 		public bool IsReadOnly { get; }
@@ -44,7 +45,7 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 		public IReadOnlyList<ITypeParameter> TypeParameters { get; }
 		public KnownTypeCode KnownTypeCode { get; }
 		public IType EnumUnderlyingType { get; }
-		public bool HasExtensionMethods { get; }
+		public bool HasExtensions { get; }
 		public Nullability NullableContext { get; }
 
 		// lazy-loaded:
@@ -108,16 +109,33 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 				this.Kind = TypeKind.Delegate;
 			} else {
 				this.Kind = TypeKind.Class;
-				this.HasExtensionMethods = this.IsStatic &&
-										   (module.TypeSystemOptions & TypeSystemOptions.ExtensionMethods) ==
-										   TypeSystemOptions.ExtensionMethods &&
-										   handle.CustomAttributes.HasKnownAttribute(KnownAttribute.Extension);
+				this.HasExtensions = this.IsStatic
+					&& (module.TypeSystemOptions & TypeSystemOptions.ExtensionMethods) == TypeSystemOptions.ExtensionMethods
+					&& handle.CustomAttributes.HasKnownAttribute(KnownAttribute.Extension);
 			}
 		}
 
 		public override string ToString()
 		{
 			return $"{handle.MDToken.Raw:X8} {fullTypeName}";
+		}
+
+		private ExtensionInfo extensionInfo;
+
+		public ExtensionInfo ExtensionInfo {
+			get {
+				if (!HasExtensions)
+					return null;
+				if ((module.TypeSystemOptions & TypeSystemOptions.ExtensionMembers) == 0)
+					return null;
+				var extensionInfo = LazyInit.VolatileRead(ref this.extensionInfo);
+				if (extensionInfo != null)
+					return extensionInfo;
+				extensionInfo = new ExtensionInfo(module, this);
+				if ((module.TypeSystemOptions & TypeSystemOptions.Uncached) != 0)
+					return extensionInfo;
+				return LazyInit.GetOrSet(ref this.extensionInfo, extensionInfo);
+			}
 		}
 
 		ITypeDefinition[] nestedTypes;
@@ -158,10 +176,10 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 					return fields;
 				var fieldCollection = handle.Fields;
 				var fieldList = new List<IField>(fieldCollection.Count);
-				foreach (FieldDef field in fieldCollection) {
-					var attr = field.Attributes;
+				foreach (FieldDef @field in fieldCollection) {
+					var attr = @field.Attributes;
 					if (module.IsVisible(attr)) {
-						fieldList.Add(module.GetDefinition(field));
+						fieldList.Add(module.GetDefinition(@field));
 					}
 				}
 				if ((module.TypeSystemOptions & TypeSystemOptions.Uncached) != 0)
@@ -686,7 +704,18 @@ namespace ICSharpCode.Decompiler.TypeSystem.Implementation
 				opInequality |= (method.Name == "op_Inequality");
 				clone |= (method.Name == "<Clone>$");
 			}
-			return getEqualityContract & toString & printMembers & getHashCode & equals & opEquality & opInequality & clone;
+			// relaxed check for toString:
+			// record classes may have their ToString implementation only in the base class,
+			// so we cannot check for it here, as the type hierarchy is not yet known.
+			// usually, the existence of a "<Clone>$" and "get_EqualityContract" method should
+			// be a good enough indicator.
+			// in record structs we require a ToString implementation, because the PrintMembers
+			// method needs to be called.
+			if (isStruct && !toString)
+			{
+				return false;
+			}
+			return getEqualityContract & printMembers & getHashCode & equals & opEquality & opInequality & clone;
 		}
 		#endregion
 	}

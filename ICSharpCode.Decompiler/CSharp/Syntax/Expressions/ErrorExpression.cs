@@ -1,4 +1,4 @@
-﻿//
+//
 // ErrorExpression.cs
 //
 // Author:

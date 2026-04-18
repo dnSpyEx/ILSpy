@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 {
@@ -44,7 +44,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 				}
 			}
 		}
-
 
 		public delegate ref T RefFunc<T>();
 		public delegate ref readonly T ReadOnlyRefFunc<T>();
@@ -319,6 +318,11 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 			Console.WriteLine(LastOrDefault());
 			LastOrDefault() = 10000;
 			Console.WriteLine(ElementAtOrDefault(-5));
+		}
+
+		public void CallWithTemplatedInParameterOnSelf()
+		{
+			M2<RefLocalsAndReturns>(this);
 		}
 
 #if CS120

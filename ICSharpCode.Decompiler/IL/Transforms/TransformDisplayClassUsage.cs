@@ -52,7 +52,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			private readonly IField field;
 			private ILVariable declaredVariable;
 
-			public string Name => field.Name;
+			public string Name => @field.Name;
 
 			public bool CanPropagate { get; private set; }
 			public bool UsesInitialValue { get; set; }
@@ -594,7 +594,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			if (context.Settings.LocalFunctions && closureType?.Kind == TypeKind.Struct
 												&& variable.UsesInitialValue && IsPotentialClosure(context, closureType))
 			{
-				initializer = LocalFunctionDecompiler.GetStatement(variable.AddressInstructions.OrderBy(i => i.StartILOffset).First());
+				initializer = Block.GetContainingStatement(variable.AddressInstructions.OrderBy(i => i.StartILOffset).First());
 				return true;
 			}
 			return false;
@@ -706,13 +706,26 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 					return false;
 			}
 
-			while (potentialDisplayClass != decompiledTypeDefinition)
+			// Make sure that potentialDisplayCLass and decompiledTypeDefinition are part of the same type tree
+			// Either decompiledTypeDefinition is an ancestor type of potentialDisplayClass or both have
+			// at least one common ancestor.
+			var potentialDisplayClassAncestors = new HashSet<ITypeDefinition>();
+			var potentialDisplayClassParent = potentialDisplayClass.DeclaringTypeDefinition;
+			while (potentialDisplayClassParent != null)
 			{
-				potentialDisplayClass = potentialDisplayClass.DeclaringTypeDefinition;
-				if (potentialDisplayClass == null)
-					return false;
+				potentialDisplayClassAncestors.Add(potentialDisplayClassParent);
+				potentialDisplayClassParent = potentialDisplayClassParent.DeclaringTypeDefinition;
 			}
-			return true;
+
+			var decompiledTypeDefinitionOrAncestor = decompiledTypeDefinition;
+
+			while (decompiledTypeDefinitionOrAncestor != null)
+			{
+				if (potentialDisplayClassAncestors.Contains(decompiledTypeDefinitionOrAncestor))
+					return true;
+				decompiledTypeDefinitionOrAncestor = decompiledTypeDefinitionOrAncestor.DeclaringTypeDefinition;
+			}
+			return false;
 		}
 
 		readonly Stack<ILFunction> currentFunctions = new Stack<ILFunction>();

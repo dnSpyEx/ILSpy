@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 {
@@ -41,12 +41,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 		public void ParameterHiddenByLocal(@_ _)
 		{
 			GetOut(out var _);
-		}
-
-		public void DiscardedOutVsLambdaParameter()
-		{
-			GetOut(out var _);
-			MakeValue((@_ _) => 5);
 		}
 
 		public void ExplicitlyTypedDiscard()

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -112,7 +112,6 @@ namespace ICSharpCode.Decompiler.IL
 			}
 			return null;
 		}
-
 
 		/// <summary>
 		/// Returns true if <c>inst</c> computes the address of a fixed variable; false if it computes the address of a moveable variable.

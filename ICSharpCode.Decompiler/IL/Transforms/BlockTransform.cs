@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -67,7 +67,6 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 		{
 		}
 	}
-
 
 	/// <summary>
 	/// IL transform that runs a list of per-block transforms.

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -252,6 +252,11 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 		/// Controls whether all fully qualified type names should be prefixed with "global::".
 		/// </summary>
 		public bool AlwaysUseGlobal { get; set; }
+
+		/// <summary>
+		/// Controls whether C# 14 "extension" declarations are supported.
+		/// </summary>
+		public bool SupportExtensionDeclarations { get; set; }
 		#endregion
 
 		#region Convert Type
@@ -368,7 +373,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				foreach (var customCallConv in fpt.CustomCallingConventions)
 				{
 					AstType callConvSyntax;
-					if (customCallConv.Name.StartsWith("CallConv", StringComparison.Ordinal) && customCallConv.Name.Length > 8)
+					if (customCallConv.Namespace == "System.Runtime.CompilerServices" && customCallConv.Name.StartsWith("CallConv", StringComparison.Ordinal) && customCallConv.Name.Length > 8)
 					{
 						callConvSyntax = new PrimitiveType(customCallConv.Name.Substring(8));
 						if (AddResolveResultAnnotations)
@@ -495,7 +500,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				// Look if there's an alias to the target type
 				if (UseAliases)
 				{
-					for (ResolvedUsingScope usingScope = resolver.CurrentUsingScope; usingScope != null; usingScope = usingScope.Parent)
+					for (UsingScope usingScope = resolver.CurrentUsingScope; usingScope != null; usingScope = usingScope.Parent)
 					{
 						foreach (var pair in usingScope.UsingAliases)
 						{
@@ -546,7 +551,13 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			{
 				// Handle nested types
 				result.Target = ConvertTypeHelper(genericType.DeclaringType, typeArguments);
-				AddTypeAnnotation(result.Target, genericType.DeclaringType);
+				// Use correct number of type arguments on the declaring type
+				var declaringType = genericType.DeclaringType;
+				if (outerTypeParameterCount > 0)
+				{
+					declaringType = new ParameterizedType(genericType.DeclaringType, typeArguments.Take(outerTypeParameterCount));
+				}
+				AddTypeAnnotation(result.Target, declaringType);
 			}
 			else
 			{
@@ -643,7 +654,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				// Look if there's an alias to the target namespace
 				if (UseAliases)
 				{
-					for (ResolvedUsingScope usingScope = resolver.CurrentUsingScope; usingScope != null; usingScope = usingScope.Parent)
+					for (UsingScope usingScope = resolver.CurrentUsingScope; usingScope != null; usingScope = usingScope.Parent)
 					{
 						foreach (var pair in usingScope.UsingAliases)
 						{
@@ -1735,8 +1746,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			{
 				decl.Name = parameter.Name;
 			}
-			if (parameter.IsOptional && decl.ParameterModifier is ReferenceKind.None or ReferenceKind.In or ReferenceKind.RefReadOnly
-				&& parameter.HasConstantValueInSignature && this.ShowConstantValues)
+			if (parameter.IsDefaultValueAssignmentAllowed() && this.ShowConstantValues)
 			{
 				try
 				{
@@ -1805,6 +1815,16 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				default:
 					throw new ArgumentException("Invalid value for SymbolKind: " + entity.SymbolKind);
 			}
+		}
+
+		public EntityDeclaration ConvertExtension((IMethod MarkerMethod, IReadOnlyList<ITypeParameter> TypeParameters) group)
+		{
+			var ext = new ExtensionDeclaration();
+			var subst = new TypeParameterSubstitution(group.TypeParameters, []);
+			ext.TypeParameters.AddRange(group.TypeParameters.Select(ConvertTypeParameter));
+			ext.ReceiverParameters.Add(ConvertParameter(group.MarkerMethod.Specialize(subst).Parameters.Single()));
+			ext.Constraints.AddRange(group.TypeParameters.Select(ConvertTypeParameterConstraint));
+			return ext;
 		}
 
 		EntityDeclaration ConvertTypeDefinition(ITypeDefinition typeDefinition)
@@ -2466,7 +2486,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 
 		internal Constraint ConvertTypeParameterConstraint(ITypeParameter tp)
 		{
-			if (!tp.HasDefaultConstructorConstraint && !tp.HasReferenceTypeConstraint && !tp.HasValueTypeConstraint && tp.NullabilityConstraint != Nullability.NotNullable && tp.DirectBaseTypes.All(IsObjectOrValueType))
+			if (!tp.HasDefaultConstructorConstraint && !tp.HasReferenceTypeConstraint && !tp.HasValueTypeConstraint && !tp.AllowsRefLikeType && tp.NullabilityConstraint != Nullability.NotNullable && tp.DirectBaseTypes.All(IsObjectOrValueType))
 			{
 				return null;
 			}
@@ -2518,6 +2538,10 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			if (tp.HasDefaultConstructorConstraint && !tp.HasValueTypeConstraint)
 			{
 				c.BaseTypes.Add(new PrimitiveType("new"));
+			}
+			if (tp.AllowsRefLikeType)
+			{
+				c.BaseTypes.Add(new PrimitiveType("allows ref struct"));
 			}
 			return c;
 		}

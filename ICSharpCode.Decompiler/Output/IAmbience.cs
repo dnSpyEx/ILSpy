@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -121,6 +121,10 @@ namespace ICSharpCode.Decompiler.Output
 		/// Support C# 7.2 <c>private protected</c>.
 		/// </summary>
 		UsePrivateProtectedAccessibility = 0x200000,
+		/// <summary>
+		/// Support C# 14 <c>extension</c> declarations.
+		/// </summary>
+		SupportExtensionDeclarations = 0x400000,
 
 		StandardConversionFlags = ShowParameterNames |
 			ShowAccessibility |

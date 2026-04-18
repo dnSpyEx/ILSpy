@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 // Copyright (c) 2016 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
@@ -122,7 +122,6 @@ namespace ICSharpCode.Decompiler.Util
 					return count;
 			}
 		}
-
 
 		IEnumerable<LongInterval> DoIntersectWith(LongSet other)
 		{
@@ -343,6 +342,13 @@ namespace ICSharpCode.Decompiler.Util
 
 		public IEnumerable<long> Values {
 			get { return Intervals.SelectMany(i => i.Range()); }
+		}
+
+		public LongInterval ContainingInterval()
+		{
+			if (IsEmpty)
+				return default;
+			return new LongInterval(Intervals[0].Start, Intervals[Intervals.Length - 1].End);
 		}
 
 		public override string ToString()

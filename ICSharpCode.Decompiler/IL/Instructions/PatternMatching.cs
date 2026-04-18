@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 // Copyright (c) 2014 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
@@ -567,7 +567,6 @@ namespace ICSharpCode.Decompiler.IL
 					return false;
 			}
 		}
-
 
 		/// <summary>
 		/// If this instruction is a conversion of the specified kind, return its argument.

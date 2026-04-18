@@ -63,7 +63,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 		}
 
 		#region Disassemble Method
-		EnumNameCollection<MethodAttributes> methodAttributeFlags = new EnumNameCollection<MethodAttributes>() {
+		internal static readonly EnumNameCollection<MethodAttributes> methodAttributeFlags = new EnumNameCollection<MethodAttributes>() {
 			{ MethodAttributes.Final, "final" },
 			{ MethodAttributes.HideBySig, "hidebysig" },
 			{ MethodAttributes.SpecialName, "specialname" },
@@ -79,7 +79,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 			{ MethodAttributes.HasSecurity, null },	// ?? also invisible in ILDasm
 		};
 
-		EnumNameCollection<MethodAttributes> methodVisibility = new EnumNameCollection<MethodAttributes>() {
+		internal static readonly EnumNameCollection<MethodAttributes> methodVisibility = new EnumNameCollection<MethodAttributes>() {
 			{ MethodAttributes.Private, "private" },
 			{ MethodAttributes.FamANDAssem, "famandassem" },
 			{ MethodAttributes.Assembly, "assembly" },
@@ -97,14 +97,14 @@ namespace ICSharpCode.Decompiler.Disassembler
 			{ CallingConvention.Generic, null },
 		};
 
-		EnumNameCollection<MethodImplAttributes> methodCodeType = new EnumNameCollection<MethodImplAttributes>() {
+		internal static readonly EnumNameCollection<MethodImplAttributes> methodCodeType = new EnumNameCollection<MethodImplAttributes>() {
 			{ MethodImplAttributes.IL, "cil" },
 			{ MethodImplAttributes.Native, "native" },
 			{ MethodImplAttributes.OPTIL, "optil" },
 			{ MethodImplAttributes.Runtime, "runtime" },
 		};
 
-		EnumNameCollection<MethodImplAttributes> methodImpl = new EnumNameCollection<MethodImplAttributes>() {
+		internal static readonly EnumNameCollection<MethodImplAttributes> methodImpl = new EnumNameCollection<MethodImplAttributes>() {
 			{ MethodImplAttributes.Synchronized, "synchronized" },
 			{ MethodImplAttributes.NoInlining, "noinlining" },
 			{ MethodImplAttributes.NoOptimization, "nooptimization" },
@@ -679,7 +679,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 		#endregion
 
 		#region Disassemble Field
-		EnumNameCollection<FieldAttributes> fieldVisibility = new EnumNameCollection<FieldAttributes>() {
+		internal static readonly EnumNameCollection<FieldAttributes> fieldVisibility = new EnumNameCollection<FieldAttributes>() {
 			{ FieldAttributes.Private, "private" },
 			{ FieldAttributes.FamANDAssem, "famandassem" },
 			{ FieldAttributes.Assembly, "assembly" },
@@ -688,7 +688,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 			{ FieldAttributes.Public, "public" },
 		};
 
-		EnumNameCollection<FieldAttributes> fieldAttributes = new EnumNameCollection<FieldAttributes>() {
+		internal static readonly EnumNameCollection<FieldAttributes> fieldAttributes = new EnumNameCollection<FieldAttributes>() {
 			{ FieldAttributes.Static, "static" },
 			{ FieldAttributes.Literal, "literal" },
 			{ FieldAttributes.InitOnly, "initonly" },
@@ -729,7 +729,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 		#endregion
 
 		#region Disassemble Property
-		EnumNameCollection<PropertyAttributes> propertyAttributes = new EnumNameCollection<PropertyAttributes>() {
+		internal static readonly EnumNameCollection<PropertyAttributes> propertyAttributes = new EnumNameCollection<PropertyAttributes>() {
 			{ PropertyAttributes.SpecialName, "specialname" },
 			{ PropertyAttributes.RTSpecialName, "rtspecialname" },
 			{ PropertyAttributes.HasDefault, "hasdefault" },
@@ -782,7 +782,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 		#endregion
 
 		#region Disassemble Event
-		EnumNameCollection<EventAttributes> eventAttributes = new EnumNameCollection<EventAttributes>() {
+		internal static readonly EnumNameCollection<EventAttributes> eventAttributes = new EnumNameCollection<EventAttributes>() {
 			{ EventAttributes.SpecialName, "specialname" },
 			{ EventAttributes.RTSpecialName, "rtspecialname" },
 		};
@@ -810,7 +810,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 		#endregion
 
 		#region Disassemble Type
-		EnumNameCollection<TypeAttributes> typeVisibility = new EnumNameCollection<TypeAttributes>() {
+		internal static readonly EnumNameCollection<TypeAttributes> typeVisibility = new EnumNameCollection<TypeAttributes>() {
 			{ TypeAttributes.Public, "public" },
 			{ TypeAttributes.NotPublic, "private" },
 			{ TypeAttributes.NestedPublic, "nested public" },
@@ -833,7 +833,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 			{ TypeAttributes.UnicodeClass, "unicode" },
 		};
 
-		EnumNameCollection<TypeAttributes> typeAttributes = new EnumNameCollection<TypeAttributes>() {
+		internal static readonly EnumNameCollection<TypeAttributes> typeAttributes = new EnumNameCollection<TypeAttributes>() {
 			{ TypeAttributes.Abstract, "abstract" },
 			{ TypeAttributes.Sealed, "sealed" },
 			{ TypeAttributes.SpecialName, "specialname" },
@@ -1023,9 +1023,6 @@ namespace ICSharpCode.Decompiler.Disassembler
 				}
 				output.Write(blob[i].ToString("x2"));
 			}
-
-			output.WriteLine();
-			output.Unindent();
 			output.Write(")");
 		}
 
@@ -1059,7 +1056,7 @@ namespace ICSharpCode.Decompiler.Disassembler
 				}
 			}
 			if ((val & ~tested) != 0)
-				output.Write("flag({0:x4}) ", val & ~tested);
+				output.Write("flags({0:x4}) ", val & ~tested);
 		}
 
 		void WriteEnum<T>(T enumValue, EnumNameCollection<T> enumNames) where T : struct
@@ -1081,9 +1078,13 @@ namespace ICSharpCode.Decompiler.Disassembler
 
 		}
 
-		sealed class EnumNameCollection<T> : IEnumerable<KeyValuePair<long, string>> where T : struct
+		internal struct EnumNameCollection<T> : IEnumerable<KeyValuePair<long, string>> where T : struct
 		{
 			List<KeyValuePair<long, string>> names = new List<KeyValuePair<long, string>>();
+
+			public EnumNameCollection()
+			{
+			}
 
 			public void Add(T flag, string name)
 			{

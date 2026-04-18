@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -57,8 +57,18 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 			var arguments = invocationExpression.Arguments.ToArray();
 
 			// Reduce "String.Concat(a, b)" to "a + b"
-			if (IsStringConcat(method) && context.Settings.StringConcat && CheckArgumentsForStringConcat(arguments))
+			if (IsStringConcat(method) && context.Settings.StringConcat)
 			{
+				if (arguments is [ArrayCreateExpression ace] && method.Parameters is [{ Type: ArrayType }])
+				{
+					arguments = ace.Initializer.Elements.ToArray();
+				}
+
+				if (!CheckArgumentsForStringConcat(arguments))
+				{
+					return;
+				}
+
 				bool isInExpressionTree = invocationExpression.Ancestors.OfType<LambdaExpression>().Any(
 					lambda => lambda.Annotation<IL.ILFunction>()?.Kind == IL.ILFunctionKind.ExpressionTree);
 				Expression arg0 = arguments[0].Detach();
@@ -128,7 +138,10 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 				break;
 				*/
 				case "System.Activator.CreateInstance":
-					if (arguments.Length == 0 && method.TypeArguments.Count == 1 && IsInstantiableTypeParameter(method.TypeArguments[0]))
+					if (context.Settings.UseObjectCreationOfGenericTypeParameter &&
+						arguments.Length == 0 &&
+						method.TypeArguments.Count == 1 &&
+						IsInstantiableTypeParameter(method.TypeArguments[0]))
 					{
 						invocationExpression.ReplaceWith(new ObjectCreateExpression(context.TypeSystemAstBuilder.ConvertType(method.TypeArguments.First())));
 					}

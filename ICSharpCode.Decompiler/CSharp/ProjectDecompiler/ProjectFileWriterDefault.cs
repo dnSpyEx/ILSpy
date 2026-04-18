@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Siegfried Pammer
+// Copyright (c) 2020 Siegfried Pammer
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -98,6 +98,7 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 
 				w.WriteElementString("OutputType", outputType);
 				w.WriteElementString("LangVersion", project.LanguageVersion.ToString().Replace("CSharp", "").Replace('_', '.'));
+				w.WriteElementString("CheckForOverflowUnderflow", project.CheckForOverflowUnderflow ? "true" : "false");
 
 				w.WriteElementString("AssemblyName", module.Name);
 				if (targetFramework.Identifier != null)
@@ -142,7 +143,6 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 				w.WriteElementString("DebugType", "pdbonly");
 				w.WriteElementString("Optimize", "true");
 				w.WriteEndElement(); // </PropertyGroup> (Release)
-
 
 				w.WriteStartElement("ItemGroup"); // References
 				foreach (var r in module.AssemblyReferences)

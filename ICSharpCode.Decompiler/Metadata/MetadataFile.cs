@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2024 Siegfried Pammer
+// Copyright (c) 2024 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -77,6 +77,18 @@ namespace ICSharpCode.Decompiler.Metadata
 					value = LazyInit.GetOrSet(ref name, value);
 				}
 				return value;
+			}
+		}
+
+		PropertyAndEventBackingFieldLookup? propertyAndEventBackingFieldLookup;
+
+		internal PropertyAndEventBackingFieldLookup PropertyAndEventBackingFieldLookup {
+			get {
+				var r = LazyInit.VolatileRead(ref propertyAndEventBackingFieldLookup);
+				if (r != null)
+					return r;
+				else
+					return LazyInit.GetOrSet(ref propertyAndEventBackingFieldLookup, new PropertyAndEventBackingFieldLookup(Metadata));
 			}
 		}
 

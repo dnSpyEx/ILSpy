@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2014-2020 Daniel Grunwald
+// Copyright (c) 2014-2020 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -266,7 +266,7 @@
 			CustomInvariant("CheckTargetSlot();")),
 
 		new OpCode("box", "Boxes a value.",
-			Unary, HasTypeOperand, MemoryAccess, MayThrow, ResultType("O")),
+			Unary, HasTypeOperand, ResultType("O")),
 		new OpCode("unbox", "Compute address inside box.",
 			Unary, HasTypeOperand, MayThrow, ResultType("Ref")),
 		new OpCode("unbox.any", "Unbox a value.",
@@ -290,6 +290,9 @@
 			CustomClassName("LdElema"), HasTypeOperand, CustomChildren(new [] { new ArgumentInfo("array"), new ArgumentInfo("indices") { IsCollection = true } }, true),
 			BoolFlag("WithSystemIndex"),
 			MayThrowIfNotDelayed, ResultType("Ref"), SupportsReadonlyPrefix),
+		new OpCode("ldelema.inlinearray", "Load address of inline array element.",
+			CustomClassName("LdElemaInlineArray"), HasTypeOperand, CustomChildren(new [] { new ArgumentInfo("array"), new ArgumentInfo("indices") { IsCollection = true } }, true),
+			MayThrow, ResultType("Ref"), SupportsReadonlyPrefix),
 		new OpCode("get.pinnable.reference", "Retrieves a pinnable reference for the input object." + Environment.NewLine
 				+ "The input must be an object reference (O)." + Environment.NewLine
 				+ "If the input is an array/string, evaluates to a reference to the first element/character, or to a null reference if the array is null or empty." + Environment.NewLine
@@ -1078,16 +1081,16 @@ protected override void Disconnected()
 	}
 	
 	static Action<OpCode> HasFieldOperand = opCode => {
-		opCode.ConstructorParameters.Add("IField field");
-		opCode.Members.Add("readonly IField field;");
-		opCode.ConstructorBody.Add("this.field = field;");
-		opCode.MatchParameters.Add(new MatchParamInfo { TypeName = "IField", Name = "field", FieldName = "Field" });
-		opCode.PerformMatchConditions.Add("field.Equals(o.field)");
+		opCode.ConstructorParameters.Add("IField @field");
+		opCode.Members.Add("readonly IField @field;");
+		opCode.ConstructorBody.Add("this.@field = @field;");
+		opCode.MatchParameters.Add(new MatchParamInfo { TypeName = "IField", Name = "@field", FieldName = "Field" });
+		opCode.PerformMatchConditions.Add("@field.Equals(o.@field)");
 		opCode.Members.Add("/// <summary>Returns the field operand.</summary>" + Environment.NewLine
-						+ "public IField Field { get { return field; } }");
+						+ "public IField Field { get { return @field; } }");
 		opCode.GenerateWriteTo = true;
 		opCode.WriteOperand.Add("output.Write(' ');");
-		opCode.WriteOperand.Add("field.WriteTo(output);");
+		opCode.WriteOperand.Add("@field.WriteTo(output);");
 		opCode.Interfaces.Add("IInstructionWithFieldOperand");
 	};
 

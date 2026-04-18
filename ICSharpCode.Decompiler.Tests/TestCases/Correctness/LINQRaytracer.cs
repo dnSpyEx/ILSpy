@@ -1,4 +1,4 @@
-﻿// This test case is taken from https://blogs.msdn.microsoft.com/lukeh/2007/10/01/taking-linq-to-objects-to-extremes-a-fully-linqified-raytracer/
+// This test case is taken from https://blogs.msdn.microsoft.com/lukeh/2007/10/01/taking-linq-to-objects-to-extremes-a-fully-linqified-raytracer/
 
 using System;
 using System.Collections.Generic;
@@ -174,7 +174,6 @@ namespace RayTracer
 									: .7,
 				Roughness = 150
 			};
-
 
 		public static readonly Surface Shiny =
 			new Surface() {

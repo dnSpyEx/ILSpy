@@ -82,7 +82,9 @@ namespace ICSharpCode.Decompiler.CSharp
 		internal readonly DecompilerSettings settings;
 		readonly CancellationToken cancellationToken;
 
-		public ExpressionBuilder(StatementBuilder statementBuilder, IDecompilerTypeSystem typeSystem, ITypeResolveContext decompilationContext, ILFunction currentFunction, DecompilerSettings settings, CancellationToken cancellationToken)
+		public ExpressionBuilder(StatementBuilder statementBuilder, IDecompilerTypeSystem typeSystem,
+			ITypeResolveContext decompilationContext, ILFunction currentFunction, DecompilerSettings settings,
+			DecompileRun decompileRun, CancellationToken cancellationToken)
 		{
 			Debug.Assert(decompilationContext != null);
 			this.statementBuilder = statementBuilder;
@@ -92,7 +94,12 @@ namespace ICSharpCode.Decompiler.CSharp
 			this.settings = settings;
 			this.cancellationToken = cancellationToken;
 			this.compilation = decompilationContext.Compilation;
-			this.resolver = new CSharpResolver(new CSharpTypeResolveContext(compilation.MainModule, null, decompilationContext.CurrentTypeDefinition, decompilationContext.CurrentMember));
+			this.resolver = new CSharpResolver(new CSharpTypeResolveContext(
+				compilation.MainModule,
+				decompileRun.UsingScope,
+				decompilationContext.CurrentTypeDefinition,
+				decompilationContext.CurrentMember
+				));
 			this.astBuilder = new TypeSystemAstBuilder(resolver);
 			this.astBuilder.AlwaysUseShortTypeNames = true;
 			this.astBuilder.AddResolveResultAnnotations = true;
@@ -390,10 +397,12 @@ namespace ICSharpCode.Decompiler.CSharp
 				//  unbox.any T(isinst T(expr)) ==> "expr as T" for nullable value types and class-constrained generic types
 				//  comp(isinst T(expr) != null) ==> "expr is T"
 				//  on block level (StatementBuilder.VisitIsInst) => "expr is T"
-				if (SemanticHelper.IsPure(inst.Argument.Flags))
+				if (SemanticHelper.IsPure(inst.Argument.Flags) || (inst.Argument is Box box && SemanticHelper.IsPure(box.Argument.Flags)))
 				{
 					// We can emulate isinst using
 					//   expr is T ? expr : null
+					// (doubling the boxing side-effect is harmless because the "expr is T" part won't observe object identity,
+					//  and we need to support this because Roslyn pattern matching sometimes generates such code.)
 					return new ConditionalExpression(
 						new IsExpression(arg, ConvertType(inst.Type)).WithILInstruction(inst),
 						arg.Expression.Clone(),
@@ -1099,6 +1108,21 @@ namespace ICSharpCode.Decompiler.CSharp
 				}
 				left = left.ConvertTo(inputType, this);
 				right = right.ConvertTo(inputType, this);
+			}
+			else if (inst.InputType == StackType.O)
+			{
+				// Unsafe.As<object, UIntPtr>(ref left) op Unsafe.As<object, UIntPtr>(ref right)
+				// TTo Unsafe.As<TFrom, TTo>(ref TFrom source)
+				var integerType = compilation.FindType(inst.Sign == Sign.Signed ? KnownTypeCode.IntPtr : KnownTypeCode.UIntPtr);
+				left = WrapInUnsafeAs(left, inst.Left);
+				right = WrapInUnsafeAs(right, inst.Right);
+
+				TranslatedExpression WrapInUnsafeAs(TranslatedExpression expr, ILInstruction inst)
+				{
+					var type = expr.Type;
+					expr = WrapInRef(expr, new ByReferenceType(type));
+					return CallUnsafeIntrinsic("As", [expr], integerType, typeArguments: [type, integerType]);
+				}
 			}
 			return new BinaryOperatorExpression(left.Expression, op, right.Expression)
 				.WithILInstruction(inst)
@@ -3129,6 +3153,23 @@ namespace ICSharpCode.Decompiler.CSharp
 				.WithoutILInstruction().WithRR(new ByReferenceResolveResult(expr.ResolveResult, ReferenceKind.Ref));
 		}
 
+		protected internal override TranslatedExpression VisitLdElemaInlineArray(LdElemaInlineArray inst, TranslationContext context)
+		{
+			TranslatedExpression arrayExpr = TranslateTarget(
+				inst.Array,
+				nonVirtualInvocation: true,
+				memberStatic: false,
+				memberDeclaringType: inst.Type
+			);
+			var inlineArrayElementType = inst.Type.GetInlineArrayElementType();
+			IndexerExpression indexerExpr = new IndexerExpression(
+					arrayExpr, inst.Indices.Select(i => TranslateArrayIndex(i).Expression)
+			);
+			TranslatedExpression expr = indexerExpr.WithILInstruction(inst).WithRR(new ResolveResult(inlineArrayElementType));
+			return new DirectionExpression(FieldDirection.Ref, expr)
+				.WithoutILInstruction().WithRR(new ByReferenceResolveResult(expr.ResolveResult, ReferenceKind.Ref));
+		}
+
 		TranslatedExpression TranslateArrayIndex(ILInstruction i)
 		{
 			var input = Translate(i);
@@ -3160,16 +3201,16 @@ namespace ICSharpCode.Decompiler.CSharp
 			return input.ConvertTo(targetType, this);
 		}
 
-		internal static bool IsUnboxAnyWithIsInst(UnboxAny unboxAny, IsInst isInst)
+		internal static bool IsUnboxAnyWithIsInst(UnboxAny unboxAny, IType isInstType)
 		{
-			return unboxAny.Type.Equals(isInst.Type)
-				&& (unboxAny.Type.IsKnownType(KnownTypeCode.NullableOfT) || isInst.Type.IsReferenceType == true);
+			return unboxAny.Type.Equals(isInstType)
+				&& (unboxAny.Type.IsKnownType(KnownTypeCode.NullableOfT) || isInstType.IsReferenceType == true);
 		}
 
 		protected internal override TranslatedExpression VisitUnboxAny(UnboxAny inst, TranslationContext context)
 		{
 			TranslatedExpression arg;
-			if (inst.Argument is IsInst isInst && IsUnboxAnyWithIsInst(inst, isInst))
+			if (inst.Argument is IsInst isInst && IsUnboxAnyWithIsInst(inst, isInst.Type))
 			{
 				// unbox.any T(isinst T(expr)) ==> expr as T
 				// This is used for generic types and nullable value types
@@ -3318,22 +3359,28 @@ namespace ICSharpCode.Decompiler.CSharp
 			for (int i = 1; i < block.Instructions.Count; i++)
 			{
 				var call = (Call)block.Instructions[i];
+
+				Interpolation BuildInterpolation(int alignment = 0, string suffix = null)
+				{
+					return new Interpolation(Translate(call.Arguments[1]).ConvertTo(call.GetParameter(1).Type, this, allowImplicitConversion: true), alignment, suffix);
+				}
+
 				switch (call.Method.Name)
 				{
 					case "AppendLiteral":
 						content.Add(new InterpolatedStringText(((LdStr)call.Arguments[1]).Value.Replace("{", "{{").Replace("}", "}}")));
 						break;
 					case "AppendFormatted" when call.Arguments.Count == 2:
-						content.Add(new Interpolation(Translate(call.Arguments[1])));
+						content.Add(BuildInterpolation());
 						break;
 					case "AppendFormatted" when call.Arguments.Count == 3 && call.Arguments[2] is LdStr ldstr:
-						content.Add(new Interpolation(Translate(call.Arguments[1]), suffix: ldstr.Value));
+						content.Add(BuildInterpolation(suffix: ldstr.Value));
 						break;
 					case "AppendFormatted" when call.Arguments.Count == 3 && call.Arguments[2] is LdcI4 ldci4:
-						content.Add(new Interpolation(Translate(call.Arguments[1]), alignment: ldci4.Value));
+						content.Add(BuildInterpolation(alignment: ldci4.Value));
 						break;
 					case "AppendFormatted" when call.Arguments.Count == 4 && call.Arguments[2] is LdcI4 ldci4 && call.Arguments[3] is LdStr ldstr:
-						content.Add(new Interpolation(Translate(call.Arguments[1]), ldci4.Value, ldstr.Value));
+						content.Add(BuildInterpolation(ldci4.Value, ldstr.Value));
 						break;
 					default:
 						throw new NotSupportedException();
@@ -3465,11 +3512,11 @@ namespace ICSharpCode.Decompiler.CSharp
 						);
 						break;
 					case IL.Transforms.AccessPathKind.Setter:
-						Debug.Assert(lastElement.Member is IProperty || lastElement.Member is IField);
-						if (lastElement.Indices?.Length > 0)
+						Debug.Assert(lastElement.Member is IProperty or IField);
+						if (lastElement.Indices?.Length is var indices and > 0)
 						{
 							var property = (IProperty)lastElement.Member;
-							Debug.Assert(property.IsIndexer);
+							Debug.Assert(property.Parameters.Count == indices);
 							Debug.Assert(property.Setter != null, $"Indexer property {property} has no setter");
 							elementsStack.Peek().Add(
 								new CallBuilder(this, typeSystem, settings)
@@ -3935,63 +3982,108 @@ namespace ICSharpCode.Decompiler.CSharp
 		internal (TranslatedExpression, IType, StringToInt) TranslateSwitchValue(SwitchInstruction inst, bool isExpressionContext)
 		{
 			TranslatedExpression value;
-			IType type;
+			IType governingType;
 			// prepare expression and expected type
+			// first try to guess a governing type
 			if (inst.Value is StringToInt strToInt)
 			{
 				value = Translate(strToInt.Argument);
-				type = strToInt.ExpectedType ?? compilation.FindType(KnownTypeCode.String);
+				governingType = strToInt.ExpectedType ?? compilation.FindType(KnownTypeCode.String);
 			}
 			else
 			{
 				strToInt = null;
 				value = Translate(inst.Value);
-				type = inst.Type ?? value.Type;
-			}
+				governingType = inst.Type ?? value.Type;
 
-			// find and unwrap the input type
-			IType inputType = value.Type;
-			if (value.Expression is CastExpression && value.ResolveResult is ConversionResolveResult crr)
-			{
-				inputType = crr.Input.Type;
-			}
-			inputType = NullableType.GetUnderlyingType(inputType).GetEnumUnderlyingType();
-
-			// check input/underlying type for compatibility
-			bool allowImplicitConversion;
-			if (IsCompatibleWithSwitch(inputType) || (strToInt != null && inputType.Equals(type)))
-			{
-				allowImplicitConversion = !isExpressionContext;
-			}
-			else
-			{
-				var applicableImplicitConversionOperators = inputType.GetMethods(IsCompatibleImplicitConversionOperator).ToArray();
-				switch (applicableImplicitConversionOperators.Length)
+				// validate the governing type
+				if (inst.Value.ResultType == StackType.I8)
 				{
-					case 0:
-						allowImplicitConversion = !isExpressionContext;
-						break;
-					case 1:
-						allowImplicitConversion = !isExpressionContext;
-						// TODO validate
-						break;
-					default:
-						allowImplicitConversion = false;
-						break;
+					if (governingType.GetStackType() != StackType.I8)
+						governingType = FindType(StackType.I8, governingType.GetSign());
+				}
+				else if (inst.Value.ResultType == StackType.I4)
+				{
+					if (governingType.GetStackType() != StackType.I4)
+						governingType = FindType(StackType.I4, governingType.GetSign());
+					if (governingType.IsSmallIntegerType())
+					{
+						var defaultSection = inst.GetDefaultSection();
+						int bits = 8 * governingType.GetSize();
+						int minValue = governingType.GetSign() == Sign.Unsigned ? 0 : -(1 << (bits - 1));
+						int maxValue = governingType.GetSign() == Sign.Unsigned ? (1 << bits) - 1 : (1 << (bits - 1)) - 1;
+						foreach (var section in inst.Sections)
+						{
+							if (section == defaultSection)
+								continue;
+							LongInterval interval = section.Labels.ContainingInterval();
+							if (interval.Start < minValue || interval.InclusiveEnd > maxValue)
+							{
+								// governing type is too small to hold all case values
+								governingType = FindType(StackType.I4, Sign.Signed);
+								break;
+							}
+						}
+					}
+				}
+				else
+				{
+					Debug.Assert(inst.Value.ResultType == StackType.O);
+					Debug.Assert(inst.IsLifted);
+					Debug.Assert(inst.Type == governingType);
 				}
 			}
 
-			value = value.ConvertTo(type, this, allowImplicitConversion: allowImplicitConversion);
+			if (isExpressionContext)
+			{
+				value = value.ConvertTo(governingType, this, allowImplicitConversion: false);
+			}
+			else
+			{
+				value = value.ConvertTo(governingType, this, allowImplicitConversion: true);
+
+				var csharpGoverningType = GetCSharpSwitchGoverningType(value.Type);
+				if (!csharpGoverningType.Equals(governingType))
+				{
+					value = value.ConvertTo(governingType, this, allowImplicitConversion: false);
+				}
+			}
 
 			var caseType = strToInt != null
 				? compilation.FindType(KnownTypeCode.String)
-				: type;
+				: governingType;
 
 			return (value, caseType, strToInt);
+		}
+
+		static IType GetCSharpSwitchGoverningType(IType type)
+		{
+			if (IsCompatibleWithSwitch(type))
+				return type;
+
+			var applicableImplicitConversionOperators = type.GetMethods(IsImplicitConversionOperator)
+				.Where(m => IsCompatibleWithSwitch(m.ReturnType))
+				.ToArray();
+			if (applicableImplicitConversionOperators.Length != 1)
+				return type;
+			return applicableImplicitConversionOperators[0].ReturnType;
+
+			static bool IsImplicitConversionOperator(IMethod operatorMethod)
+			{
+				if (!operatorMethod.IsOperator)
+					return false;
+				if (operatorMethod.Name != "op_Implicit")
+					return false;
+				if (operatorMethod.Parameters.Count != 1)
+					return false;
+				return true;
+			}
 
 			static bool IsCompatibleWithSwitch(IType type)
 			{
-				return type.IsKnownType(KnownTypeCode.SByte)
+				type = NullableType.GetUnderlyingType(type);
+				return type.IsKnownType(KnownTypeCode.Boolean)
+					|| type.IsKnownType(KnownTypeCode.SByte)
 					|| type.IsKnownType(KnownTypeCode.Byte)
 					|| type.IsKnownType(KnownTypeCode.Int16)
 					|| type.IsKnownType(KnownTypeCode.UInt16)
@@ -4001,17 +4093,6 @@ namespace ICSharpCode.Decompiler.CSharp
 					|| type.IsKnownType(KnownTypeCode.UInt64)
 					|| type.IsKnownType(KnownTypeCode.Char)
 					|| type.IsKnownType(KnownTypeCode.String);
-			}
-
-			bool IsCompatibleImplicitConversionOperator(IMethod operatorMethod)
-			{
-				if (!operatorMethod.IsOperator)
-					return false;
-				if (operatorMethod.Name != "op_Implicit")
-					return false;
-				if (operatorMethod.Parameters.Count != 1)
-					return false;
-				return IsCompatibleWithSwitch(operatorMethod.ReturnType);
 			}
 		}
 
@@ -4294,7 +4375,7 @@ namespace ICSharpCode.Decompiler.CSharp
 		{
 			if (!(input.Expression is DirectionExpression dirExpr && input.ResolveResult is ByReferenceResolveResult brrr))
 				return input;
-			if (isAddressOf && kind is ReferenceKind.In or ReferenceKind.RefReadOnly)
+			if ((isAddressOf || dirExpr.Expression is ThisReferenceExpression) && kind is ReferenceKind.In or ReferenceKind.RefReadOnly)
 			{
 				return input.UnwrapChild(dirExpr.Expression);
 			}
@@ -4516,10 +4597,50 @@ namespace ICSharpCode.Decompiler.CSharp
 					.WithILInstruction(inst);
 			}
 			// C# 9 function pointer
+			dnlib.DotNet.CallingConvention callingConvention = dnlib.DotNet.CallingConvention.Default;
+			ImmutableArray<IType> customCallingConventions;
+			var unmanagedCallersOnlyAttribute = inst.Method.GetAttributes().FirstOrDefault(m => m.AttributeType.IsKnownType(KnownAttribute.UnmanagedCallersOnly));
+			if (unmanagedCallersOnlyAttribute != null)
+			{
+				callingConvention = dnlib.DotNet.CallingConvention.Unmanaged;
+
+				var callingConventionsArgument = unmanagedCallersOnlyAttribute.NamedArguments.FirstOrDefault(a => a.Name == "CallConvs");
+				if (callingConventionsArgument.Value is ImmutableArray<CustomAttributeTypedArgument<IType>> array)
+				{
+					var builder = ImmutableArray.CreateBuilder<IType>(array.Length);
+					foreach (var type in array.Select(a => a.Value).OfType<IType>())
+					{
+						dnlib.DotNet.CallingConvention? foundCallingConvention = type.Namespace is not "System.Runtime.CompilerServices" || callingConvention != dnlib.DotNet.CallingConvention.Unmanaged ? null : type.Name switch {
+							"CallConvCdecl" => dnlib.DotNet.CallingConvention.C,
+							"CallConvFastcall" => dnlib.DotNet.CallingConvention.FastCall,
+							"CallConvStdcall" => dnlib.DotNet.CallingConvention.StdCall,
+							"CallConvThiscall" => dnlib.DotNet.CallingConvention.ThisCall,
+							_ => null,
+						};
+						if (foundCallingConvention is not null)
+						{
+							callingConvention = foundCallingConvention.Value;
+						}
+						else
+						{
+							builder.Add(type);
+						}
+					}
+					customCallingConventions = builder.ToImmutable();
+				}
+				else
+				{
+					customCallingConventions = [];
+				}
+			}
+			else
+			{
+				callingConvention = dnlib.DotNet.CallingConvention.Default;
+				customCallingConventions = [];
+			}
 			var ftp = new FunctionPointerType(
 				typeSystem.MainModule,
-				// TODO: calling convention
-				dnlib.DotNet.CallingConvention.Default, ImmutableArray.Create<IType>(),
+				callingConvention, customCallingConventions,
 				inst.Method.ReturnType, inst.Method.ReturnTypeIsRefReadOnly,
 				inst.Method.Parameters.SelectImmutableArray(p => p.Type),
 				inst.Method.Parameters.SelectImmutableArray(p => p.ReferenceKind)
@@ -4600,7 +4721,6 @@ namespace ICSharpCode.Decompiler.CSharp
 					continue;
 				conversionMapping.Add(inputVariable, outputVariable);
 			}
-
 
 			var lhs = ConstructTuple(inst.Pattern);
 			return new AssignmentExpression(lhs, rhs)

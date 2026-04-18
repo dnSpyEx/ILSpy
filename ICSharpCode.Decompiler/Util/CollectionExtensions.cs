@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -311,7 +311,6 @@ namespace ICSharpCode.Decompiler.Util
 				return minElement;
 			}
 		}
-
 
 #if !NET8_0_OR_GREATER
 		/// <summary>

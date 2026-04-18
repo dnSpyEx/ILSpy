@@ -1,4 +1,4 @@
-﻿// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -208,6 +208,12 @@ namespace ICSharpCode.Decompiler.Tests
 		}
 
 		[Test]
+		public async Task Issue3344CkFinite()
+		{
+			await Run();
+		}
+
+		[Test]
 		public async Task Issue3421()
 		{
 			await Run();
@@ -215,6 +221,36 @@ namespace ICSharpCode.Decompiler.Tests
 
 		[Test]
 		public async Task Issue3442()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task Issue3465()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task Issue3466()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task Issue3504()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task Issue3524()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task Issue3552()
 		{
 			await Run();
 		}
@@ -287,6 +323,22 @@ namespace ICSharpCode.Decompiler.Tests
 			await Run();
 		}
 
+		[Test]
+		public async Task ExtensionEncodingV1()
+		{
+			// uses Microsoft.Net.Compilers.Toolset 5.0.0-2.25380.108
+			// see ExtensionEncodingV1.il for details
+			await Run();
+		}
+
+		[Test]
+		public async Task ExtensionEncodingV2()
+		{
+			// uses Microsoft.Net.Compilers.Toolset 5.0.0-2.25451.107
+			// see ExtensionEncodingV2.il for details
+			await Run();
+		}
+
 		async Task Run([CallerMemberName] string testName = null, DecompilerSettings settings = null,
 			AssemblerOptions assemblerOptions = AssemblerOptions.Library)
 		{
@@ -301,7 +353,7 @@ namespace ICSharpCode.Decompiler.Tests
 			var executable = await Tester.AssembleIL(ilFile, assemblerOptions).ConfigureAwait(false);
 			var decompiled = await Tester.DecompileCSharp(executable, settings).ConfigureAwait(false);
 
-			CodeAssert.FilesAreEqual(csFile, decompiled);
+			CodeAssert.FilesAreEqual(csFile, decompiled, ["EXPECTED_OUTPUT"]);
 			Tester.RepeatOnIOError(() => File.Delete(decompiled));
 		}
 

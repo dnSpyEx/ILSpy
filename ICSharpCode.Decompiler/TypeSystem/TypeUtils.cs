@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2015 Siegfried Pammer
+// Copyright (c) 2015 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -15,6 +15,8 @@
 // FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
+
+using System.Reflection;
 
 using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.TypeSystem.Implementation;

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Siegfried Pammer
+// Copyright (c) 2020 Siegfried Pammer
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -28,7 +28,7 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 	/// <summary>
 	/// Helper services for determining the target framework and platform of a module.
 	/// </summary>
-	static class TargetServices
+	public static class TargetServices
 	{
 		const string VersionToken = "Version=";
 		const string ProfileToken = "Profile=";
@@ -76,11 +76,11 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 				targetFrameworkIdentifier = frameworkParts.FirstOrDefault(a => !a.StartsWith(VersionToken, StringComparison.OrdinalIgnoreCase) && !a.StartsWith(ProfileToken, StringComparison.OrdinalIgnoreCase));
 				string frameworkVersion = frameworkParts.FirstOrDefault(a => a.StartsWith(VersionToken, StringComparison.OrdinalIgnoreCase));
 
-				if (frameworkVersion != null)
+				if (frameworkVersion != null && Version.TryParse(frameworkVersion.Substring(VersionToken.Length).Replace("v", ""), out var version))
 				{
-					versionNumber = int.Parse(frameworkVersion.Substring(VersionToken.Length).Replace("v", "").Replace(".", ""));
-					if (versionNumber < 100)
-						versionNumber *= 10;
+					versionNumber = version.Major * 100 + version.Minor * 10;
+					if (version.Build > 0)
+						versionNumber += version.Build;
 				}
 
 				string frameworkProfile = frameworkParts.FirstOrDefault(a => a.StartsWith(ProfileToken, StringComparison.OrdinalIgnoreCase));

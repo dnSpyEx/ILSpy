@@ -1,4 +1,4 @@
-﻿// 
+// 
 // FullTypeName.cs
 //
 // Author:
@@ -23,11 +23,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-
-using System;
-
-using ICSharpCode.Decompiler.CSharp.Resolver;
-using ICSharpCode.Decompiler.TypeSystem;
 
 namespace ICSharpCode.Decompiler.CSharp.Syntax
 {
@@ -72,11 +67,6 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				&& this.CallingConventions.DoMatch(o.CallingConventions, match)
 				&& this.Parameters.DoMatch(o.Parameters, match)
 				&& this.ReturnType.DoMatch(o.ReturnType, match);
-		}
-
-		public override ITypeReference ToTypeReference(NameLookupMode lookupMode, InterningProvider interningProvider = null)
-		{
-			throw new NotImplementedException();
 		}
 	}
 }

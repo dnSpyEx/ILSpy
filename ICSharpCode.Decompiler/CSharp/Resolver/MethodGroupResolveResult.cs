@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.NetworkInformation;
 
 using ICSharpCode.Decompiler.Semantics;
 using ICSharpCode.Decompiler.TypeSystem;
@@ -81,6 +82,7 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 		readonly IReadOnlyList<IType> typeArguments;
 		readonly ResolveResult targetResult;
 		readonly string methodName;
+		IMethod chosenMethod;
 
 		public MethodGroupResolveResult(ResolveResult targetResult, string methodName,
 			IReadOnlyList<MethodListWithDeclaringType> methods, IReadOnlyList<IType> typeArguments)
@@ -147,6 +149,20 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 
 		// the resolver is used to fetch extension methods on demand
 		internal CSharpResolver resolver;
+
+		/// <summary>
+		/// Gets the method that was chosen for this group.
+		/// 
+		/// Only set for MethodGroupResolveResults found in ILSpy AST annotations.
+		/// </summary>
+		public IMethod ChosenMethod => chosenMethod;
+
+		public MethodGroupResolveResult WithChosenMethod(IMethod method)
+		{
+			var result = (MethodGroupResolveResult)ShallowClone();
+			result.chosenMethod = method;
+			return result;
+		}
 
 		/// <summary>
 		/// Gets all candidate extension methods.

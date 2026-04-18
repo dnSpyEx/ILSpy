@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -63,6 +63,7 @@ namespace ICSharpCode.Decompiler
 				liftNullables = false;
 				yieldReturn = false;
 				useImplicitMethodGroupConversion = false;
+				useObjectCreationOfGenericTypeParameter = false;
 			}
 			if (languageVersion < CSharp.LanguageVersion.CSharp3)
 			{
@@ -150,6 +151,7 @@ namespace ICSharpCode.Decompiler
 			{
 				fileScopedNamespaces = false;
 				recordStructs = false;
+				structDefaultConstructorsAndFieldInitializers = false;
 			}
 			if (languageVersion < CSharp.LanguageVersion.CSharp11_0)
 			{
@@ -164,16 +166,30 @@ namespace ICSharpCode.Decompiler
 			{
 				refReadOnlyParameters = false;
 				usePrimaryConstructorSyntaxForNonRecordTypes = false;
+				inlineArrays = false;
+			}
+			if (languageVersion < CSharp.LanguageVersion.CSharp13_0)
+			{
+				paramsCollections = false;
+			}
+			if (languageVersion < CSharp.LanguageVersion.CSharp14_0)
+			{
+				extensionMembers = false;
+				firstClassSpanTypes = false;
 			}
 		}
 
 		public CSharp.LanguageVersion GetMinimumRequiredVersion()
 		{
-			if (refReadOnlyParameters || usePrimaryConstructorSyntaxForNonRecordTypes)
+			if (extensionMembers || firstClassSpanTypes)
+				return CSharp.LanguageVersion.CSharp14_0;
+			if (paramsCollections)
+				return CSharp.LanguageVersion.CSharp13_0;
+			if (refReadOnlyParameters || usePrimaryConstructorSyntaxForNonRecordTypes || inlineArrays)
 				return CSharp.LanguageVersion.CSharp12_0;
 			if (scopedRef || requiredMembers || numericIntPtr || utf8StringLiterals || unsignedRightShift || checkedOperators)
 				return CSharp.LanguageVersion.CSharp11_0;
-			if (fileScopedNamespaces || recordStructs)
+			if (fileScopedNamespaces || recordStructs || structDefaultConstructorsAndFieldInitializers)
 				return CSharp.LanguageVersion.CSharp10_0;
 			if (nativeIntegers || initAccessors || functionPointers || forEachWithGetEnumeratorExtension
 				|| recordClasses || withExpressions || usePrimaryConstructorSyntax || covariantReturns
@@ -203,7 +219,7 @@ namespace ICSharpCode.Decompiler
 			if (anonymousTypes || objectCollectionInitializers || automaticProperties
 				|| queryExpressions || expressionTrees)
 				return CSharp.LanguageVersion.CSharp3;
-			if (anonymousMethods || liftNullables || yieldReturn || useImplicitMethodGroupConversion)
+			if (anonymousMethods || liftNullables || yieldReturn || useImplicitMethodGroupConversion || useObjectCreationOfGenericTypeParameter)
 				return CSharp.LanguageVersion.CSharp2;
 			return CSharp.LanguageVersion.CSharp1;
 		}
@@ -311,6 +327,24 @@ namespace ICSharpCode.Decompiler
 				if (recordStructs != value)
 				{
 					recordStructs = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool structDefaultConstructorsAndFieldInitializers = true;
+
+		/// <summary>
+		/// Use field initializers in structs.
+		/// </summary>
+		[Category("C# 10.0 / VS 2022")]
+		[Description("DecompilerSettings.StructDefaultConstructorsAndFieldInitializers")]
+		public bool StructDefaultConstructorsAndFieldInitializers {
+			get { return structDefaultConstructorsAndFieldInitializers; }
+			set {
+				if (structDefaultConstructorsAndFieldInitializers != value)
+				{
+					structDefaultConstructorsAndFieldInitializers = value;
 					OnPropertyChanged();
 				}
 			}
@@ -848,6 +882,24 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool paramsCollections = true;
+
+		/// <summary>
+		/// Support params collections.
+		/// </summary>
+		[Category("C# 13.0 / VS 2022.12")]
+		[Description("DecompilerSettings.DecompileParamsCollections")]
+		public bool ParamsCollections {
+			get { return paramsCollections; }
+			set {
+				if (paramsCollections != value)
+				{
+					paramsCollections = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool lockStatement = true;
 
 		/// <summary>
@@ -956,6 +1008,26 @@ namespace ICSharpCode.Decompiler
 				if (useImplicitMethodGroupConversion != value)
 				{
 					useImplicitMethodGroupConversion = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool useObjectCreationOfGenericTypeParameter = true;
+
+		/// <summary>
+		/// Gets/Sets whether to use object creation expressions for generic types with <c>new()</c> constraint.
+		/// true: <c>T t = new T();</c>
+		/// false: <c>T t = Activator.CreateInstance&lt;T&gt;()</c>
+		/// </summary>
+		[Category("C# 2.0 / VS 2005")]
+		[Description("DecompilerSettings.UseObjectCreationOfGenericTypeParameter")]
+		public bool UseObjectCreationOfGenericTypeParameter {
+			get { return useObjectCreationOfGenericTypeParameter; }
+			set {
+				if (useObjectCreationOfGenericTypeParameter != value)
+				{
+					useObjectCreationOfGenericTypeParameter = value;
 					OnPropertyChanged();
 				}
 			}
@@ -1651,6 +1723,25 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool expandParamsArguments = true;
+
+		/// <summary>
+		/// Gets/Sets whether to expand <c>params</c> arguments by replacing explicit array creation
+		/// with individual values in method calls.
+		/// </summary>
+		[Category("C# 1.0 / VS .NET")]
+		[Description("DecompilerSettings.ExpandParamsArguments")]
+		public bool ExpandParamsArguments {
+			get { return expandParamsArguments; }
+			set {
+				if (expandParamsArguments != value)
+				{
+					expandParamsArguments = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool localFunctions = true;
 
 		/// <summary>
@@ -2053,6 +2144,60 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool inlineArrays = true;
+
+		/// <summary>
+		/// Gets/Sets whether C# 12.0 inline array uses should be transformed.
+		/// </summary>
+		[Category("C# 12.0 / VS 2022.8")]
+		[Description("DecompilerSettings.InlineArrays")]
+		public bool InlineArrays {
+			get { return inlineArrays; }
+			set {
+				if (inlineArrays != value)
+				{
+					inlineArrays = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool extensionMembers = true;
+
+		/// <summary>
+		/// Gets/Sets whether C# 14.0 extension members should be transformed.
+		/// </summary>
+		[Category("C# 14.0 / VS 202x.yy")]
+		[Description("DecompilerSettings.ExtensionMembers")]
+		public bool ExtensionMembers {
+			get { return extensionMembers; }
+			set {
+				if (extensionMembers != value)
+				{
+					extensionMembers = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool firstClassSpanTypes = true;
+
+		/// <summary>
+		/// Gets/Sets whether (ReadOnly)Span&lt;T&gt; should be treated like built-in types.
+		/// </summary>
+		[Category("C# 14.0 / VS 202x.yy")]
+		[Description("DecompilerSettings.FirstClassSpanTypes")]
+		public bool FirstClassSpanTypes {
+			get { return firstClassSpanTypes; }
+			set {
+				if (firstClassSpanTypes != value)
+				{
+					firstClassSpanTypes = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool separateLocalVariableDeclarations = false;
 
 		/// <summary>
@@ -2167,6 +2312,27 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool alwaysMoveInitializer = false;
+
+		/// <summary>
+		/// If set to false (the default), the decompiler will move field initializers at the start of constructors
+		/// to their respective field declarations (TransformFieldAndConstructorInitializers) only when the declaring
+		/// type has BeforeFieldInit or the member IsConst.
+		/// If set true, the decompiler will always move them regardless of the flags.
+		/// </summary>
+		[Category("DecompilerSettings.Other")]
+		[Description("DecompilerSettings.AlwaysMoveInitializer")]
+		public bool AlwaysMoveInitializer {
+			get { return alwaysMoveInitializer; }
+			set {
+				if (alwaysMoveInitializer != value)
+				{
+					alwaysMoveInitializer = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool sortCustomAttributes = false;
 
 		/// <summary>
@@ -2180,6 +2346,24 @@ namespace ICSharpCode.Decompiler
 				if (sortCustomAttributes != value)
 				{
 					sortCustomAttributes = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool checkForOverflowUnderflow = false;
+
+		/// <summary>
+		/// Check for overflow and underflow in operators.
+		/// </summary>
+		[Category("DecompilerSettings.Other")]
+		[Description("DecompilerSettings.CheckForOverflowUnderflow")]
+		public bool CheckForOverflowUnderflow {
+			get { return checkForOverflowUnderflow; }
+			set {
+				if (checkForOverflowUnderflow != value)
+				{
+					checkForOverflowUnderflow = value;
 					OnPropertyChanged();
 				}
 			}
@@ -2220,7 +2404,7 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
-		public DecompilerSettings Clone()
+		public virtual DecompilerSettings Clone()
 		{
 			DecompilerSettings settings = (DecompilerSettings)MemberwiseClone();
 			if (csharpFormattingOptions != null)

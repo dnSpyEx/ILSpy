@@ -86,9 +86,15 @@ namespace ICSharpCode.Decompiler.TypeSystem
 					isReferenceType = isVT == ThreeState.False;
 				else
 					isReferenceType = null;
-				var gctr = new GetClassTypeReference(typeDefOrRef.GetFullTypeName(),
-					new DefaultAssemblyReference(typeDefOrRef.Scope.ScopeName), isReferenceType);
-				return gctr.Resolve(new SimpleTypeResolveContext(module));
+				FullTypeName fullTypeName = typeDefOrRef.GetFullTypeName();
+				foreach (var asm in module.Compilation.Modules)
+				{
+
+					var type = asm.GetTypeDefinition(fullTypeName);
+					if (type != null)
+						return type;
+				}
+				return new UnknownType(fullTypeName, isReferenceType);
 			}
 		}
 

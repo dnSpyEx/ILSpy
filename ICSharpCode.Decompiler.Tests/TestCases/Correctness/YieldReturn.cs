@@ -1,4 +1,4 @@
-﻿// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -251,7 +251,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 			}
 		}
 
-
 		public static IEnumerable<char> ExceptionHandling()
 		{
 			yield return 'a';
@@ -410,7 +409,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 				Console.WriteLine("Outer Finally");
 			}
 		}
-
 
 		public static IEnumerable<int> TryFinallyWithTwoExitPoints(bool b)
 		{

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2020 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2020 AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -389,6 +389,38 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			base.VisitAsExpression(asExpression);
 		}
 
+		public override void VisitInterpolation(Interpolation interpolation)
+		{
+			// Need to do this first, in case the descendents parenthesize themselves.
+			base.VisitInterpolation(interpolation);
+
+			// If an interpolation contains global::, we need to parenthesize the expression.
+			if (InterpolationNeedsParenthesis(interpolation))
+				Parenthesize(interpolation.Expression);
+
+			static bool InterpolationNeedsParenthesis(AstNode node)
+			{
+				if (node is MemberType { IsDoubleColon: true })
+					return true;
+
+				if (node is ParenthesizedExpression)
+					return false;
+				if (node is AnonymousMethodExpression or LambdaExpression { Body: BlockStatement })
+					return false;
+				if (node is InvocationExpression invocation)
+					return InterpolationNeedsParenthesis(invocation.Target);
+				if (node is CastExpression cast)
+					return InterpolationNeedsParenthesis(cast.Expression);
+
+				foreach (var child in node.Children)
+				{
+					if (InterpolationNeedsParenthesis(child))
+						return true;
+				}
+				return false;
+			}
+		}
+
 		// Conditional operator
 		public override void VisitConditionalExpression(ConditionalExpression conditionalExpression)
 		{
@@ -426,6 +458,15 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 
 		public override void VisitAssignmentExpression(AssignmentExpression assignmentExpression)
 		{
+			// Assignments in initializers need additional parentheses to disambiguate assignments
+			// to variables and assignments to members of the initialized object.
+			// This works without access to semantic information, because the ExpressionBuilder
+			// uses NamedExpression for `Member = value` instead of AssignmentExpression.
+			if (assignmentExpression.Parent is ArrayInitializerExpression
+				&& assignmentExpression.Left is not IndexerExpression)
+			{
+				Parenthesize(assignmentExpression);
+			}
 			// assignment is right-associative
 			ParenthesizeIfRequired(assignmentExpression.Left, PrecedenceLevel.Assignment + 1);
 			HandleAssignmentRHS(assignmentExpression.Right);

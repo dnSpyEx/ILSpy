@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2014 Daniel Grunwald
+// Copyright (c) 2014 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -136,6 +136,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 						switch (trr.Type.FullName)
 						{
 							case "System.Security.UnverifiableCodeAttribute":
+							case "System.Runtime.CompilerServices.RefSafetyRulesAttribute":
 								attribute.Remove();
 								break;
 						}
@@ -166,6 +167,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 			"System.Runtime.CompilerServices.NullableAttribute",
 			"System.Runtime.CompilerServices.NullableContextAttribute",
 			"System.Runtime.CompilerServices.NativeIntegerAttribute",
+			"System.Runtime.CompilerServices.ParamCollectionAttribute",
 			"System.Runtime.CompilerServices.RefSafetyRulesAttribute",
 			"System.Runtime.CompilerServices.ScopedRefAttribute",
 			"System.Runtime.CompilerServices.RequiresLocationAttribute",

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 Siegfried Pammer
+// Copyright (c) 2019 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -564,23 +564,17 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 
 		internal static bool IsClosureParameter(IParameter parameter, ITypeResolveContext context)
 		{
+			return IsClosureParameter(parameter, context.CurrentTypeDefinition);
+		}
+
+		internal static bool IsClosureParameter(IParameter parameter, ITypeDefinition currentTypeDefinition)
+		{
 			if (parameter.Type is not ByReferenceType brt)
 				return false;
 			var type = brt.ElementType.GetDefinition();
 			return type != null
 				&& type.Kind == TypeKind.Struct
-				&& TransformDisplayClassUsage.IsPotentialClosure(context.CurrentTypeDefinition, type);
-		}
-
-		internal static ILInstruction GetStatement(ILInstruction inst)
-		{
-			while (inst.Parent != null)
-			{
-				if (inst.Parent is Block b && b.Kind == BlockKind.ControlFlow)
-					return inst;
-				inst = inst.Parent;
-			}
-			return inst;
+				&& TransformDisplayClassUsage.IsPotentialClosure(currentTypeDefinition, type);
 		}
 
 		LocalFunctionMethod ReduceToLocalFunction(TypeSystem.IMethod method, int typeParametersToRemove)
@@ -744,7 +738,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 				if (variable.Kind == VariableKind.Parameter)
 					return null;
 				if (type.Kind == TypeKind.Struct)
-					return GetStatement(variable.AddressInstructions.OrderBy(i => i.StartILOffset).First());
+					return Block.GetContainingStatement(variable.AddressInstructions.OrderBy(i => i.StartILOffset).First());
 				else
 					return (StLoc)variable.StoreInstructions[0];
 			}

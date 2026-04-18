@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -95,6 +95,11 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		/// Gets if the type parameter has the 'unmanaged' constraint.
 		/// </summary>
 		bool HasUnmanagedConstraint { get; }
+
+		/// <summary>
+		/// <see langword="true"/> if the <c>allows ref struct</c> constraint is specified for the type parameter.
+		/// </summary>
+		bool AllowsRefLikeType { get; }
 
 		/// <summary>
 		/// Nullability of the reference type constraint. (e.g. "where T : class?").

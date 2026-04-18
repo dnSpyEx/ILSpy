@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -139,6 +139,7 @@ namespace ICSharpCode.Decompiler.Tests.Pretty
 			}
 		}
 
+#pragma warning disable CS8981
 		private class i
 		{
 			public static void Test()
@@ -304,15 +305,30 @@ namespace ICSharpCode.Decompiler.Tests.Pretty
 		{
 			System.Array.Sort(Array);
 		}
-
-		private void LocalConflictsWithTypeName()
+#if CS70
+		private void LocalConflictsWithLocalFunction()
 		{
-			for (int i = 0; i < 10; i++)
+			int num = 0;
+			LocalFunction();
+
+			void LocalFunction()
 			{
-				QualifierTests.i.Test();
+				QualifierTests qualifierTests2 = qualifierTests();
+				i.Test();
+				Z(qualifierTests2);
+			}
+
+			QualifierTests qualifierTests()
+			{
+				num.ToString();
+				return new QualifierTests(new string[0]);
 			}
 		}
 
+		private void Z(QualifierTests qualifierTests)
+		{
+		}
+#endif
 		public QualifierTests(string[] Array)
 		{
 			System.Array.Sort(Array);

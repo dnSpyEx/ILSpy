@@ -1,4 +1,4 @@
-﻿// 
+// 
 // TypeDeclaration.cs
 //
 // Author:
@@ -100,20 +100,28 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			get { return GetChildByRole(Roles.RChevron); }
 		}
 
-
-
 		public CSharpTokenNode ColonToken {
 			get {
 				return GetChildByRole(Roles.Colon);
 			}
 		}
 
-		public AstNodeCollection<AstType> BaseTypes {
-			get { return GetChildrenByRole(Roles.BaseType); }
+		public bool HasPrimaryConstructor { get; set; }
+
+		public CSharpTokenNode LParToken {
+			get { return GetChildByRole(Roles.LPar); }
 		}
 
 		public AstNodeCollection<ParameterDeclaration> PrimaryConstructorParameters {
 			get { return GetChildrenByRole(Roles.Parameter); }
+		}
+
+		public CSharpTokenNode RParToken {
+			get { return GetChildByRole(Roles.RPar); }
+		}
+
+		public AstNodeCollection<AstType> BaseTypes {
+			get { return GetChildrenByRole(Roles.BaseType); }
 		}
 
 		public AstNodeCollection<Constraint> Constraints {
@@ -153,6 +161,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			return o != null && this.ClassType == o.ClassType && MatchString(this.Name, o.Name)
 				&& this.MatchAttributesAndModifiers(o, match) && this.TypeParameters.DoMatch(o.TypeParameters, match)
 				&& this.BaseTypes.DoMatch(o.BaseTypes, match) && this.Constraints.DoMatch(o.Constraints, match)
+				&& this.HasPrimaryConstructor == o.HasPrimaryConstructor
 				&& this.PrimaryConstructorParameters.DoMatch(o.PrimaryConstructorParameters, match)
 				&& this.Members.DoMatch(o.Members, match);
 		}

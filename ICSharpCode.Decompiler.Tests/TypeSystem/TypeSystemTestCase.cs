@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2018 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2018 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -495,7 +495,6 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 		public const int SObl = sizeof(bool);
 		public const int SOe = sizeof(MyEnum);
 
-
 		public const byte CNewb = new byte();
 		public const sbyte CNewsb = new sbyte();
 		public const char CNewc = new char();
@@ -557,6 +556,19 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 			const int C = 43;
 			class Inner { }
 		}
+	}
+
+	public struct GenericStructWithIDisposableConstraintAndImplicitConversion<T> where T : IDisposable
+	{
+		public static implicit operator GenericStructWithIDisposableConstraintAndImplicitConversion<T>(T s)
+		{
+			return default(GenericStructWithIDisposableConstraintAndImplicitConversion<T>);
+		}
+	}
+
+	public class ClassImplementingIDisposable : IDisposable
+	{
+		public void Dispose() { }
 	}
 
 	public class ClassWithAttributeOnTypeParameter<[Double(2)] T> { }
@@ -752,5 +764,71 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 
 		[DispId(11)]
 		void StopRouter();
+	}
+
+	public static class ExtensionEverything
+	{
+		extension(int input)
+		{
+			public void Method() { }
+			public void Method(char c) { }
+			public string AsString => input.ToString();
+			public string Test {
+				get => "Test";
+				set { }
+			}
+			public static void StaticMethod() { }
+			public static void StaticMethod(double x) { }
+			public static string StaticProperty => "StaticProperty";
+			public static void GenericMethod<T>(T value)
+			{
+			}
+		}
+
+		extension(int number)
+		{
+			public int Squared => number * number;
+		}
+
+		extension(string input)
+		{
+			public void Method() { }
+			public void Method(char c) { }
+			public string AsString => input.ToString();
+			public string Test {
+				get => "Test";
+				set { }
+			}
+			public static void StaticMethodOnString() { }
+			public static void StaticMethodOnString(double x) { }
+			public static string StaticPropertyOnString => "StaticProperty";
+			public static void GenericMethodOnString<T>(T value)
+			{
+			}
+		}
+
+		extension<T>(T input)
+		{
+			public void Method() { }
+			public void Method(char c) { }
+			public string AsString => input.ToString();
+			public string Test {
+				get => "Test";
+				set { }
+			}
+			public static void StaticMethodOnGeneric() { }
+			public static void StaticMethodOnGeneric(double x) { }
+			public static string StaticPropertyOnGeneric => "StaticProperty";
+			public static void GenericMethodOnGeneric<U>(U value)
+			{
+			}
+		}
+
+		extension<T, T2>(T input)
+		{
+			public void StaticMethodOnGenericTwoParams(T2 x)
+			{
+			}
+		}
 	}
 }

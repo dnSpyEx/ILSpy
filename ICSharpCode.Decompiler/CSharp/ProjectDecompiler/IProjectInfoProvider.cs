@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Daniel Grunwald
+// Copyright (c) 2020 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -38,6 +38,11 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 		/// Gets the C# language version of the project.
 		/// </summary>
 		LanguageVersion LanguageVersion { get; }
+
+		/// <summary>
+		/// Check for overflow and underflow in operators.
+		/// </summary>
+		bool CheckForOverflowUnderflow { get; }
 
 		/// <summary>
 		/// Gets the unique ID of the project.

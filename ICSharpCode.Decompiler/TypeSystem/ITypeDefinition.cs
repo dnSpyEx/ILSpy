@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -71,10 +71,17 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		new IType? DeclaringType { get; } // solves ambiguity between IType.DeclaringType and IEntity.DeclaringType
 
 		/// <summary>
-		/// Gets whether this type contains extension methods.
+		/// Gets whether this type contains extension methods or C# 14 extensions.
 		/// </summary>
-		/// <remarks>This property is used to speed up the search for extension methods.</remarks>
-		bool HasExtensionMethods { get; }
+		/// <remarks>This property is used to speed up the search for extension members.</remarks>
+		bool HasExtensions { get; }
+
+		/// <summary>
+		/// For types containing extension blocks, returns a non-null value.
+		/// For extension blocks, returns the extension info of the parent.
+		/// For all other types returns null.
+		/// </summary>
+		ExtensionInfo? ExtensionInfo { get; }
 
 		/// <summary>
 		/// The nullability specified in the [NullableContext] attribute on the type.

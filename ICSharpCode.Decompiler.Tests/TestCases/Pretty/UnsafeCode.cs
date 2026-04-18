@@ -1,4 +1,4 @@
-﻿// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -77,6 +77,13 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 			public double Y;
 		}
 
+#if CS120
+		public unsafe struct ResultStruct(byte* ptr1, byte* ptr2)
+		{
+			public unsafe byte* ptr1 = ptr1;
+			public unsafe byte* ptr2 = ptr2;
+		}
+#else
 		public struct ResultStruct
 		{
 			public unsafe byte* ptr1;
@@ -88,6 +95,7 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 				this.ptr2 = ptr2;
 			}
 		}
+#endif
 
 		public struct StructWithFixedSizeMembers
 		{

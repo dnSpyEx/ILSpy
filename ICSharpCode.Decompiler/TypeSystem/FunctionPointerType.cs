@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Daniel Grunwald
+// Copyright (c) 2020 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -44,7 +44,31 @@ namespace ICSharpCode.Decompiler.TypeSystem
 					&& modReturn.Modifier.Namespace == "System.Runtime.CompilerServices")
 				{
 					returnType = modReturn.ElementType;
-					customCallConvs.Add(modReturn.Modifier);
+					if (callConv == dnlib.DotNet.CallingConvention.Unmanaged)
+					{
+						switch (modReturn.Modifier.Name)
+						{
+							case "CallConvCdecl":
+								callConv = dnlib.DotNet.CallingConvention.C;
+								break;
+							case "CallConvFastcall":
+								callConv = dnlib.DotNet.CallingConvention.FastCall;
+								break;
+							case "CallConvStdcall":
+								callConv = dnlib.DotNet.CallingConvention.StdCall;
+								break;
+							case "CallConvThiscall":
+								callConv = dnlib.DotNet.CallingConvention.ThisCall;
+								break;
+							default:
+								customCallConvs.Add(modReturn.Modifier);
+								break;
+						}
+					}
+					else
+					{
+						customCallConvs.Add(modReturn.Modifier);
+					}
 				}
 				else
 				{

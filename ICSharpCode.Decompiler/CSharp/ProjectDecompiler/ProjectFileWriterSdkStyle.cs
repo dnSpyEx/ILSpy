@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Siegfried Pammer
+// Copyright (c) 2020 Siegfried Pammer
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -192,6 +192,7 @@ namespace ICSharpCode.Decompiler.CSharp.ProjectDecompiler
 		{
 			xml.WriteElementString("LangVersion", project.LanguageVersion.ToString().Replace("CSharp", "").Replace('_', '.'));
 			xml.WriteElementString("AllowUnsafeBlocks", TrueString);
+			xml.WriteElementString("CheckForOverflowUnderflow", project.CheckForOverflowUnderflow ? TrueString : FalseString);
 
 			if (project.StrongNameKeyFile != null)
 			{

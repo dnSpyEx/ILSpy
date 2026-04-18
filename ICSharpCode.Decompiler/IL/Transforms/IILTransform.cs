@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2015 Daniel Grunwald
+// Copyright (c) 2015 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -22,9 +22,11 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
+using ICSharpCode.Decompiler.CSharp.Resolver;
 using ICSharpCode.Decompiler.CSharp.TypeSystem;
 using ICSharpCode.Decompiler.DebugInfo;
 using ICSharpCode.Decompiler.TypeSystem;
+using ICSharpCode.Decompiler.Util;
 
 namespace ICSharpCode.Decompiler.IL.Transforms
 {
@@ -50,7 +52,18 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 		public Metadata.MetadataFile PEFile => TypeSystem.MainModule.MetadataFile;
 
 		internal DecompileRun? DecompileRun { get; set; }
-		internal ResolvedUsingScope? UsingScope => DecompileRun?.UsingScope.Resolve(TypeSystem);
+		internal UsingScope? UsingScope => DecompileRun?.UsingScope;
+
+		CSharpResolver? csharpResolver;
+
+		internal CSharpResolver CSharpResolver {
+			get {
+				var resolver = LazyInit.VolatileRead(ref csharpResolver);
+				if (resolver != null)
+					return resolver;
+				return LazyInit.GetOrSet(ref csharpResolver, new CSharpResolver(new CSharpTypeResolveContext(TypeSystem.MainModule, UsingScope)));
+			}
+		}
 
 		public ILTransformContext(ILFunction function, IDecompilerTypeSystem typeSystem, IDebugInfoProvider? debugInfo, DecompilerSettings? settings = null)
 		{

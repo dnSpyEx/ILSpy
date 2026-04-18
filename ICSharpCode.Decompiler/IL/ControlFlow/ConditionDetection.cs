@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2014 Daniel Grunwald
+// Copyright (c) 2014 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -519,7 +519,6 @@ namespace ICSharpCode.Decompiler.IL.ControlFlow
 			bool isKeyword2 = IsKeywordExit(exit2, out var keyword2);
 			if (isKeyword1 != isKeyword2)
 				return isKeyword1 ? -1 : 1;
-
 
 			if (isKeyword1)
 			{

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 // Copyright (c) 2018 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
@@ -57,6 +54,19 @@ namespace ICSharpCode.Decompiler.Metadata
 						return $".NETFramework,Version=v{module.Assembly.Version.ToString(2)}";
 					case "netstandard":
 						return $".NETStandard,Version=v{module.Assembly.Version.ToString(2)}";
+					case "System.Runtime":
+					case "System.Private.CoreLib":
+					{
+						string version = GetDotNetCoreVersion(module.Assembly.Version);
+						if (version != null)
+						{
+							return $".NETCoreApp,Version=v{version}";
+						}
+						else
+						{
+							break;
+						}
+					}
 				}
 			}
 
@@ -69,35 +79,38 @@ namespace ICSharpCode.Decompiler.Metadata
 					string version;
 					switch (r.Name)
 					{
-						case "netstandard":
+						case "mscorlib":
 							version = r.Version.ToString(2);
-							return $".NETStandard,Version=v{version}";
+							return $".NETFramework,Version=v{version}";
 						case "System.Runtime":
-							// System.Runtime.dll uses the following scheme:
-							// 4.2.0 => .NET Core 2.0
-							// 4.2.1 => .NET Core 2.1 / 3.0
-							// 4.2.2 => .NET Core 3.1
-							if (r.Version >= new Version(4, 2, 0))
+						case "System.Private.CoreLib":
+							version = GetDotNetCoreVersion(r.Version);
+							if (version != null)
 							{
-								version = "2.0";
-								if (r.Version >= new Version(4, 2, 1))
-								{
-									version = "3.0";
-								}
-								if (r.Version >= new Version(4, 2, 2))
-								{
-									version = "3.1";
-								}
 								return $".NETCoreApp,Version=v{version}";
 							}
 							else
 							{
 								continue;
 							}
-						case "mscorlib":
-							version = r.Version.ToString(2);
-							return $".NETFramework,Version=v{version}";
 					}
+				}
+				catch (BadImageFormatException)
+				{
+					// ignore malformed references
+				}
+			}
+
+			// We check for netstandard separately because .NET Core/Framework assemblies can reference it.
+			foreach (var r in module.GetAssemblyRefs())
+			{
+				try
+				{
+					if (r.PublicKeyOrToken.IsNullOrEmpty || r.Name != "netstandard")
+						continue;
+
+					string version = r.Version.ToString(2);
+					return $".NETStandard,Version=v{version}";
 				}
 				catch (BadImageFormatException)
 				{
@@ -148,6 +161,24 @@ namespace ICSharpCode.Decompiler.Metadata
 			}
 
 			return string.Empty;
+		}
+
+		static string GetDotNetCoreVersion(Version assemblyVersion)
+		{
+			// System.Runtime.dll and System.Private.CoreLib.dll use the following scheme:
+			// 4.1.0 => .NET Core 1.0 / 1.1
+			// 4.2.0 => .NET Core 2.0
+			// 4.2.1 => .NET Core 2.1 / 3.0
+			// 4.2.2 => .NET Core 3.1
+			// 5.0.0+ => .NET 5+
+			return (assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build) switch {
+				(4, 1, 0) => "1.1",
+				(4, 2, 0) => "2.0",
+				(4, 2, 1) => "3.0",
+				(4, 2, 2) => "3.1",
+				( >= 5, _, _) => assemblyVersion.ToString(2),
+				_ => null
+			};
 		}
 
 		public static bool IsReferenceAssembly(this MetadataFile assembly)

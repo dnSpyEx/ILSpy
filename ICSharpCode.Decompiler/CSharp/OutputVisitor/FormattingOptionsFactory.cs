@@ -1,4 +1,4 @@
-﻿//
+//
 // FormattingOptionsFactory.cs
 //
 // Author:

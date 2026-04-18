@@ -1,4 +1,4 @@
-﻿//
+//
 // SyntaxTree.cs
 //
 // Author:
@@ -115,7 +115,6 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 				}
 			}
 		}
-
 
 		protected internal override bool DoMatch(AstNode other, PatternMatching.Match match)
 		{

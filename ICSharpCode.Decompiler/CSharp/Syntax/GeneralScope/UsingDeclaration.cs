@@ -1,4 +1,4 @@
-﻿//
+//
 // UsingDeclaration.cs
 //
 // Author:

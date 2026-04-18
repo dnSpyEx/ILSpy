@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -374,39 +374,6 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		public override IEnumerable<IProperty> GetProperties(Predicate<IProperty> filter = null, GetMemberOptions options = GetMemberOptions.None)
 		{
 			return UnderlyingType.GetProperties(filter, options);
-		}
-	}
-
-	public class TupleTypeReference : ITypeReference
-	{
-		/// <summary>
-		/// Gets the types of the tuple elements.
-		/// </summary>
-		public ImmutableArray<ITypeReference> ElementTypes { get; }
-
-		/// <summary>
-		/// Gets the names of the tuple elements.
-		/// </summary>
-		public ImmutableArray<string> ElementNames { get; }
-
-		public IModuleReference ValueTupleAssembly { get; }
-
-		public TupleTypeReference(ImmutableArray<ITypeReference> elementTypes,
-			ImmutableArray<string> elementNames = default(ImmutableArray<string>),
-			IModuleReference valueTupleAssembly = null)
-		{
-			this.ValueTupleAssembly = valueTupleAssembly;
-			this.ElementTypes = elementTypes;
-			this.ElementNames = elementNames;
-		}
-
-		public IType Resolve(ITypeResolveContext context)
-		{
-			return new TupleType(context.Compilation,
-				ElementTypes.Select(t => t.Resolve(context)).ToImmutableArray(),
-				ElementNames,
-				ValueTupleAssembly?.Resolve(context)
-			);
 		}
 	}
 

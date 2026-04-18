@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -16,13 +16,7 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System;
-using System.Collections.Immutable;
-using System.Linq;
-
-using ICSharpCode.Decompiler.CSharp.Resolver;
 using ICSharpCode.Decompiler.CSharp.Syntax.PatternMatching;
-using ICSharpCode.Decompiler.TypeSystem;
 
 namespace ICSharpCode.Decompiler.CSharp.Syntax
 {
@@ -47,14 +41,6 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 		public override S AcceptVisitor<T, S>(IAstVisitor<T, S> visitor, T data)
 		{
 			return visitor.VisitTupleType(this, data);
-		}
-
-		public override ITypeReference ToTypeReference(NameLookupMode lookupMode, InterningProvider interningProvider = null)
-		{
-			return new TupleTypeReference(
-				this.Elements.Select(e => e.Type.ToTypeReference(lookupMode, interningProvider)).ToImmutableArray(),
-				this.Elements.Select(e => e.Name).ToImmutableArray()
-			);
 		}
 
 		protected internal override bool DoMatch(AstNode other, Match match)

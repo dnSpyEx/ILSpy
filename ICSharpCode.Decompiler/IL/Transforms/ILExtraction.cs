@@ -1,20 +1,22 @@
-﻿// Copyright (c) 2019 Daniel Grunwald
-// 
+// Copyright (c) 2019 Daniel Grunwald
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
 // without restriction, including without limitation the rights to use, copy, modify, merge,
 // publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
 // to whom the Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all copies or
 // substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
 // PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
 // FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
+
+#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -44,7 +46,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 
 		/// <summary>
 		/// List of actions to be executed when performing the extraction.
-		/// 
+		///
 		/// Each function in this list has the side-effect of replacing the instruction-to-be-moved
 		/// with a load of a fresh temporary variable; and returns the the store to the temporary variable,
 		/// which will be inserted at block-level.
@@ -54,7 +56,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 		ExtractionContext(ILFunction function, ILTransformContext context)
 		{
 			Debug.Assert(function != null);
-			this.Function = function;
+			this.Function = function!;
 			this.context = context;
 		}
 
@@ -94,15 +96,15 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 		/// Extracts the specified instruction:
 		///   The instruction is replaced with a load of a new temporary variable;
 		///   and the instruction is moved to a store to said variable at block-level.
-		/// 
+		///
 		/// May return null if extraction is not possible.
 		/// </summary>
-		public static ILVariable Extract(ILInstruction instToExtract, ILTransformContext context)
+		public static ILVariable? Extract(ILInstruction instToExtract, ILTransformContext context)
 		{
 			var function = instToExtract.Ancestors.OfType<ILFunction>().First();
 			ExtractionContext ctx = new ExtractionContext(function, context);
 			ctx.FlagsBeingMoved = instToExtract.Flags;
-			ILInstruction inst = instToExtract;
+			ILInstruction? inst = instToExtract;
 			while (inst != null)
 			{
 				if (inst.Parent is IfInstruction ifInst && inst.SlotInfo != IfInstruction.ConditionSlot)
@@ -174,7 +176,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 					}
 					return v;
 				}
-				if (!inst.Parent.PrepareExtract(inst.ChildIndex, ctx))
+				if (inst.Parent != null && !inst.Parent.PrepareExtract(inst.ChildIndex, ctx))
 					return null;
 				inst = inst.Parent;
 			}

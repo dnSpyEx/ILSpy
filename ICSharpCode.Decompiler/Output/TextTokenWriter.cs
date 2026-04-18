@@ -102,9 +102,18 @@ namespace ICSharpCode.Decompiler
 				if (td == null || !td.IsDelegate)
 					memberRef = node.Parent.Annotation<IMemberRef>() ?? memberRef;
 			}
-			if (memberRef == null && node.Role == Roles.TargetExpression && (node.Parent is InvocationExpression || node.Parent is ObjectCreateExpression)) {
+
+			if (memberRef == null && node.Role == Roles.TargetExpression && (node.Parent is InvocationExpression))
+			{
 				memberRef = node.Parent.Annotation<IMemberRef>();
 			}
+			if (memberRef != null && node.Role == Roles.Type && node.Parent is ObjectCreateExpression)
+			{
+				var ctorSymbol = node.Parent.Annotation<IMemberRef>();
+				if (ctorSymbol != null)
+					memberRef = ctorSymbol;
+			}
+
 			if (node is IdentifierExpression && node.Role == Roles.TargetExpression && node.Parent is InvocationExpression && memberRef != null) {
 				var declaringType = memberRef.DeclaringType.Resolve();
 				if (declaringType != null && declaringType.IsDelegate)
@@ -118,8 +127,7 @@ namespace ICSharpCode.Decompiler
 			if (memberRef == null)
 				return null;
 
-			//context.Settings.AutomaticEvents &&
-			if ( memberRef is FieldDef) {
+			if (context.Settings.AutomaticEvents && memberRef is FieldDef) {
 				var field = (FieldDef)memberRef;
 				return field.DeclaringType.FindEvent(field.Name) ?? memberRef;
 			}

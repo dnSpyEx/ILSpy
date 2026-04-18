@@ -238,6 +238,10 @@ namespace ICSharpCode.Decompiler.IL
 						default:
 							return SpecialType.UnknownType;
 					}
+				case DefaultValue defaultValue:
+					return defaultValue.Type;
+				case ILFunction func when func.DelegateType != null:
+					return func.DelegateType;
 				default:
 					return SpecialType.UnknownType;
 			}

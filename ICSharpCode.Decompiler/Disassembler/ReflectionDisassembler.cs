@@ -1813,9 +1813,12 @@ namespace ICSharpCode.Decompiler.Disassembler {
 
 		}
 
-		sealed class EnumNameCollection<T> : IEnumerable<KeyValuePair<long, string>> where T : struct
+		internal struct EnumNameCollection<T> : IEnumerable<KeyValuePair<long, string>> where T : struct
 		{
 			readonly List<KeyValuePair<long, string>> names = new List<KeyValuePair<long, string>>();
+
+			public EnumNameCollection()
+			{ }
 
 			public void Add(T flag, string name) => names.Add(new KeyValuePair<long, string>(Convert.ToInt64(flag), name));
 

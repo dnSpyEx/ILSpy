@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2018 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2018 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -52,12 +52,12 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 
 		static readonly Lazy<MetadataFile> mscorlib = new Lazy<MetadataFile>(
 			delegate {
-				return LoadAssembly(Path.Combine(Helpers.Tester.RefAsmPath, "mscorlib.dll"));
+				return LoadAssembly(Path.Combine(Helpers.Tester.RefAssembliesToolset.GetPath("legacy"), "mscorlib.dll"));
 			});
 
 		static readonly Lazy<MetadataFile> systemCore = new Lazy<MetadataFile>(
 			delegate {
-				return LoadAssembly(Path.Combine(Helpers.Tester.RefAsmPath, "System.Core.dll"));
+				return LoadAssembly(Path.Combine(Helpers.Tester.RefAssembliesToolset.GetPath("legacy"), "System.Core.dll"));
 			});
 
 		static readonly Lazy<MetadataFile> testAssembly = new Lazy<MetadataFile>(
@@ -1501,7 +1501,7 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 			Assert.That(method.IsExtensionMethod);
 			Assert.That(method.ReducedFrom, Is.Null);
 
-			Assert.That(type.HasExtensionMethods);
+			Assert.That(type.HasExtensions);
 		}
 
 		[Test]
@@ -1565,7 +1565,6 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 			AssertConstantField<float>(type, "CNewf", new float());
 			AssertConstantField<decimal>(type, "CNewm", new decimal());
 		}
-
 
 		[Test]
 		public void ConstantFieldsSizeOf()
@@ -1658,7 +1657,6 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 			ITypeDefinition c = compilation.FindType(typeof(IMarshalAsTests)).GetDefinition();
 			Assert.That(c.GetMethods(m => m.Name == "GetCollectionByQuery2").Count(), Is.EqualTo(1));
 		}
-
 
 		[Test]
 		public void AttributesUsingNestedMembers()
@@ -1957,8 +1955,8 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 		{
 			var compilationWithSystemCore = new SimpleCompilation(SystemCore.WithOptions(TypeSystemOptions.Default), Mscorlib.WithOptions(TypeSystemOptions.Default));
 
-			var typeRef = ReflectionHelper.ParseReflectionName("System.Func`2, System.Core");
-			ITypeDefinition c = typeRef.Resolve(new SimpleTypeResolveContext(compilationWithSystemCore)).GetDefinition();
+			var type = ReflectionHelper.ParseReflectionName("System.Func`2, System.Core", new SimpleTypeResolveContext(compilationWithSystemCore));
+			ITypeDefinition c = type.GetDefinition();
 			Assert.That(c, Is.Not.Null, "System.Func<,> not found");
 			Assert.That(c.ParentModule.AssemblyName, Is.EqualTo("mscorlib"));
 		}
@@ -1997,6 +1995,24 @@ namespace ICSharpCode.Decompiler.Tests.TypeSystem
 
 			Assert.That(@class.HasAttribute(KnownAttribute.SpecialName));
 			Assert.That(@struct.HasAttribute(KnownAttribute.SpecialName));
+		}
+
+		[Test]
+		public void ExtensionEverything()
+		{
+			var extensionEverything = GetTypeDefinition(typeof(ExtensionEverything));
+			Assert.That(extensionEverything.IsStatic, Is.True, "ExtensionEverything should be static");
+			Assert.That(extensionEverything.HasExtensions, Is.True, "ExtensionEverything should have extensions");
+			var info = extensionEverything.ExtensionInfo;
+			Assert.That(info, Is.Not.Null, "ExtensionEverything should have ExtensionInfo");
+			foreach (var method in extensionEverything.Methods)
+			{
+				Assert.That(method.IsStatic, Is.True, "Method should be static: " + method.Name);
+				ExtensionMemberInfo? infoOfImpl = info.InfoOfImplementationMember(method);
+				Assert.That(infoOfImpl, Is.Not.Null, "Method should have implementation info: " + method.Name);
+				ExtensionMemberInfo? infoOfExtension = info.InfoOfExtensionMember(infoOfImpl.Value.ExtensionMember);
+				Assert.That(infoOfExtension, Is.EqualTo(infoOfImpl), "Info of extension member should be equal to info of implementation member: " + method.Name);
+			}
 		}
 	}
 }

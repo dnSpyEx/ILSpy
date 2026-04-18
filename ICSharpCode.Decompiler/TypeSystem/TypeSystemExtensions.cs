@@ -18,8 +18,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Reflection.Metadata;
 
+using ICSharpCode.Decompiler.IL.Transforms;
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.Semantics;
 using ICSharpCode.Decompiler.TypeSystem.Implementation;
@@ -304,6 +307,49 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				}
 				return false;
 			}
+		}
+
+		public static bool IsArrayInterfaceType(this IType type)
+		{
+			if (type == null || type.TypeParameterCount != 1)
+				return false;
+			switch (type.GetDefinition()?.KnownTypeCode)
+			{
+				case KnownTypeCode.IEnumerableOfT:
+				case KnownTypeCode.ICollectionOfT:
+				case KnownTypeCode.IListOfT:
+				case KnownTypeCode.IReadOnlyCollectionOfT:
+				case KnownTypeCode.IReadOnlyListOfT:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		public static bool IsInlineArrayType(this IType type)
+		{
+			if (type.Kind != TypeKind.Struct)
+				return false;
+			var td = type.GetDefinition();
+			if (td == null)
+				return false;
+			return td.HasAttribute(KnownAttribute.InlineArray);
+		}
+
+		public static int? GetInlineArrayLength(this IType type)
+		{
+			if (type.Kind != TypeKind.Struct)
+				return null;
+			var td = type.GetDefinition();
+			if (td == null)
+				return null;
+			var attr = td.GetAttribute(KnownAttribute.InlineArray);
+			return attr?.FixedArguments.FirstOrDefault().Value as int?;
+		}
+
+		public static IType GetInlineArrayElementType(this IType arrayType)
+		{
+			return arrayType?.GetFields(f => !f.IsStatic).SingleOrDefault()?.Type ?? SpecialType.UnknownType;
 		}
 
 		/// <summary>
@@ -597,6 +643,48 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		}
 		#endregion
 
+		#region IParameter.IsDefaultValueAssignmentAllowed
+		/// <summary>
+		/// Checks if the parameter is allowed to be assigned a default value.
+		/// </summary>
+		/// <remarks>
+		/// This checks <see cref="IParameter.IsOptional"/>, <see cref="IParameter.HasConstantValueInSignature"/>, <see cref="IParameter.ReferenceKind"/>,
+		/// and <see cref="IParameter.IsParams"/> on this parameter and all subsequent parameters.
+		/// If the parameter has no <see cref="IParameter.Owner"/>, it does not check subsequent parameters.
+		/// </remarks>
+		/// <param name="parameter">The parameter</param>
+		/// <returns>True if the <paramref name="parameter"/> has a default value and is allowed to be assigned a default value.</returns>
+		public static bool IsDefaultValueAssignmentAllowed(this IParameter parameter)
+		{
+			if (!DefaultValueAssignmentAllowedIndividual(parameter))
+				return false;
+
+			if (parameter.Owner == null)
+				return true; // Shouldn't happen, but we need to check for it.
+
+			for (int i = parameter.Owner.Parameters.Count - 1; i >= 0; i--)
+			{
+				IParameter otherParameter = parameter.Owner.Parameters[i];
+				if (otherParameter == parameter)
+					break;
+
+				if (LocalFunctionDecompiler.IsClosureParameter(otherParameter, otherParameter.Owner.DeclaringTypeDefinition))
+					continue;
+
+				if (DefaultValueAssignmentAllowedIndividual(otherParameter) || otherParameter.IsParams)
+					continue;
+
+				return false;
+			}
+			return true;
+
+			static bool DefaultValueAssignmentAllowedIndividual(IParameter parameter)
+			{
+				return parameter.IsOptional && parameter.HasConstantValueInSignature && parameter.ReferenceKind is ReferenceKind.None or ReferenceKind.In or ReferenceKind.RefReadOnly;
+			}
+		}
+		#endregion
+
 		#region IAssembly.GetTypeDefinition(string,string,int)
 		/// <summary>
 		/// Gets the type definition for a top-level type.
@@ -707,6 +795,25 @@ namespace ICSharpCode.Decompiler.TypeSystem
 			return null;
 		}
 
+		public static IModule FindModuleByAssemblyNameInfo(this ICompilation compilation, AssemblyNameInfo assemblyName)
+		{
+			foreach (var module in compilation.Modules)
+			{
+				if (string.Equals(module.FullAssemblyName, assemblyName.FullName, StringComparison.OrdinalIgnoreCase))
+				{
+					return module;
+				}
+			}
+			foreach (var module in compilation.Modules)
+			{
+				if (string.Equals(module.Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase))
+				{
+					return module;
+				}
+			}
+			return null;
+		}
+
 		/// <summary>
 		/// When given a generic type definition, returns the self-parameterized type
 		/// (i.e. the type of "this" within the type definition).
@@ -752,6 +859,17 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				ns = child;
 			}
 			return ns;
+		}
+
+		public static ExtensionInfo ResolveExtensionInfo(this IMember member)
+		{
+			if (member is null)
+			{
+				throw new ArgumentNullException(nameof(member));
+			}
+			var td = member.DeclaringTypeDefinition;
+			Debug.Assert(td != null, "IMember.DeclaringTypeDefinition should never be null");
+			return td.DeclaringTypeDefinition?.ExtensionInfo ?? td.DeclaringTypeDefinition?.DeclaringTypeDefinition?.ExtensionInfo;
 		}
 	}
 }

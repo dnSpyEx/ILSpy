@@ -1097,7 +1097,14 @@ namespace ICSharpCode.Decompiler.IL
 				case Code.Initobj:
 					return InitObj(PopStObjTarget(), ReadAndDecodeTypeReference());
 				case Code.Isinst:
-					return Push(new IsInst(Pop(StackType.O), ReadAndDecodeTypeReference()));
+				{
+					var type = ReadAndDecodeTypeReference();
+					if (type.IsReferenceType != true)
+					{
+						FlushExpressionStack(); // value-type isinst has inlining restrictions
+					}
+					return Push(new IsInst(Pop(StackType.O), type));
+				}
 				case Code.Ldelem:
 					return LdElem(ReadAndDecodeTypeReference());
 				case Code.Ldelem_I1:
@@ -1801,6 +1808,11 @@ namespace ICSharpCode.Decompiler.IL
 
 		ILInstruction Comparison(ComparisonKind kind, bool un = false)
 		{
+			if (!kind.IsEqualityOrInequality() && PeekStackType() == StackType.O)
+			{
+				FlushExpressionStack();
+			}
+
 			var right = Pop();
 			var left = Pop();
 			// left will run before right, thus preserving the evaluation order

@@ -1,4 +1,4 @@
-﻿//
+//
 // CSharpFormattingOptions.cs
 //
 // Author:
@@ -162,8 +162,6 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			get;
 			set;
 		}
-
-
 
 		public PropertyFormatting AutoPropertyFormatting { get; set; }
 

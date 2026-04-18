@@ -1,4 +1,4 @@
-﻿#pragma warning disable 1998
+#pragma warning disable 1998
 
 using System;
 using System.Collections.Generic;
@@ -144,6 +144,7 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty
 
 namespace ICSharpCode.Decompiler.Tests.TestCases.Pretty.Issue1788
 {
+#pragma warning disable CS8981
 	[AsyncMethodBuilder(typeof(builder))]
 	internal class async
 	{

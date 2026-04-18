@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 {
@@ -71,7 +71,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 		{
 			return (float)val;
 		}
-
 
 		static double CastSignedToDouble(long val)
 		{

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2014 Daniel Grunwald
+// Copyright (c) 2014 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -66,6 +66,30 @@ namespace ICSharpCode.Decompiler.CSharp
 				return FirstOptionalArgumentIndex;
 			}
 
+			public string[] GetArgumentNames(int skipCount = 0)
+			{
+				string[] argumentNames = ArgumentNames;
+				if (AddNamesToPrimitiveValues && IsPrimitiveValue.Any() && !IsExpandedForm
+						&& !ParameterNames.Any(string.IsNullOrEmpty))
+				{
+					Debug.Assert(skipCount == 0);
+					if (argumentNames == null)
+					{
+						argumentNames = new string[Arguments.Length];
+					}
+
+					for (int i = 0; i < Arguments.Length; i++)
+					{
+						if (IsPrimitiveValue[i] && argumentNames[i] == null)
+						{
+							argumentNames[i] = ParameterNames[i];
+						}
+					}
+				}
+
+				return argumentNames;
+			}
+
 			public IList<ResolveResult> GetArgumentResolveResults(int skipCount = 0)
 			{
 				var expectedParameters = ExpectedParameters;
@@ -97,33 +121,17 @@ namespace ICSharpCode.Decompiler.CSharp
 
 			public IEnumerable<Expression> GetArgumentExpressions(int skipCount = 0)
 			{
-				if (AddNamesToPrimitiveValues && IsPrimitiveValue.Any() && !IsExpandedForm
-					&& !ParameterNames.Any(p => string.IsNullOrEmpty(p)))
-				{
-					Debug.Assert(skipCount == 0);
-					if (ArgumentNames == null)
-					{
-						ArgumentNames = new string[Arguments.Length];
-					}
-
-					for (int i = 0; i < Arguments.Length; i++)
-					{
-						if (IsPrimitiveValue[i] && ArgumentNames[i] == null)
-						{
-							ArgumentNames[i] = ParameterNames[i];
-						}
-					}
-				}
+				var argumentNames = GetArgumentNames(skipCount);
 				int argumentCount = GetActualArgumentCount();
 				var useImplicitlyTypedOut = UseImplicitlyTypedOut;
-				if (ArgumentNames == null)
+				if (argumentNames == null)
 				{
 					return Arguments.Skip(skipCount).Take(argumentCount).Select(arg => AddAnnotations(arg.Expression));
 				}
 				else
 				{
 					Debug.Assert(skipCount == 0);
-					return Arguments.Take(argumentCount).Zip(ArgumentNames.Take(argumentCount),
+					return Arguments.Take(argumentCount).Zip(argumentNames.Take(argumentCount),
 						(arg, name) => {
 							if (name == null)
 								return AddAnnotations(arg.Expression);
@@ -469,6 +477,42 @@ namespace ICSharpCode.Decompiler.CSharp
 				return HandleImplicitConversion(method, argumentList.Arguments[0]);
 			}
 
+			if (settings.InlineArrays
+				&& method is { DeclaringType.FullName: "<PrivateImplementationDetails>", Name: "InlineArrayAsSpan" or "InlineArrayAsReadOnlySpan" }
+				&& argumentList.Length == 2)
+			{
+				argumentList.CheckNoNamedOrOptionalArguments();
+				var arrayType = method.TypeArguments[0];
+				var arrayLength = arrayType.GetInlineArrayLength();
+				var arrayElementType = arrayType.GetInlineArrayElementType();
+				var argument = argumentList.Arguments[0];
+				var spanLengthExpr = argumentList.Arguments[1];
+				var targetType = method.ReturnType;
+				var spanType = typeSystem.FindType(KnownTypeCode.SpanOfT);
+				if (argument.Expression is DirectionExpression { FieldDirection: FieldDirection.In or FieldDirection.Ref, Expression: var lvalueExpr })
+				{
+					// `(TargetType)(in arg)` is invalid syntax.
+					// Also, `f(in arg)` is invalid when there's an implicit conversion involved.
+					argument = argument.UnwrapChild(lvalueExpr);
+				}
+				if (spanLengthExpr.ResolveResult.ConstantValue is int spanLength && spanLength <= arrayLength)
+				{
+					if (spanLength < arrayLength)
+					{
+						argument = new IndexerExpression(argument.Expression, new BinaryOperatorExpression {
+							Operator = BinaryOperatorType.Range,
+							Right = spanLengthExpr.Expression
+						}).WithRR(new ResolveResult(new ParameterizedType(spanType, arrayElementType))).WithoutILInstruction();
+						if (targetType.IsKnownType(KnownTypeCode.SpanOfT))
+						{
+							return argument;
+						}
+					}
+					return new CastExpression(expressionBuilder.ConvertType(targetType), argument.Expression)
+					.WithRR(new ConversionResolveResult(targetType, argument.ResolveResult, Conversion.InlineArrayConversion));
+				}
+			}
+
 			if (settings.LiftNullables && method.Name == "GetValueOrDefault"
 				&& method.DeclaringType.IsKnownType(KnownTypeCode.NullableOfT)
 				&& method.DeclaringType.TypeArguments[0].IsKnownType(KnownTypeCode.Boolean)
@@ -501,6 +545,10 @@ namespace ICSharpCode.Decompiler.CSharp
 			Expression targetExpr;
 			string methodName = method.Name;
 			AstNodeCollection<AstType> typeArgumentList;
+			if ((transform & CallTransformation.NoNamedArgsForPrettiness) != 0)
+			{
+				argumentList.AddNamesToPrimitiveValues = false;
+			}
 			if ((transform & CallTransformation.NoOptionalArgumentAllowed) != 0)
 			{
 				argumentList.FirstOptionalArgumentIndex = -1;
@@ -652,7 +700,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			argumentList.UseImplicitlyTypedOut = false;
 			var transform = GetRequiredTransformationsForCall(expectedTargetDetails, method, ref unused,
 				ref argumentList, CallTransformation.None, out _);
-			Debug.Assert(transform == CallTransformation.None || transform == CallTransformation.NoOptionalArgumentAllowed);
+			Debug.Assert((transform & ~(CallTransformation.NoOptionalArgumentAllowed | CallTransformation.NoNamedArgsForPrettiness)) == 0);
 
 			// Calls with only one argument do not need an array initializer expression to wrap them.
 			// Any special cases are handled by the caller (i.e., ExpressionBuilder.TranslateObjectAndCollectionInitializer)
@@ -946,9 +994,10 @@ namespace ICSharpCode.Decompiler.CSharp
 				}
 				else
 				{
-					firstOptionalArgumentIndex = -2;
+					if (firstOptionalArgumentIndex != -1)
+						firstOptionalArgumentIndex = -2;
 				}
-				if (parameter.IsParams && i + 1 == callArguments.Count && argumentToParameterMap == null)
+				if (expressionBuilder.settings.ExpandParamsArguments && parameter.IsParams && i + 1 == callArguments.Count && argumentToParameterMap == null)
 				{
 					// Parameter is marked params
 					// If the argument is an array creation, inline all elements into the call and add missing default values.
@@ -1005,25 +1054,14 @@ namespace ICSharpCode.Decompiler.CSharp
 		}
 
 		private bool TransformParamsArgument(ExpectedTargetDetails expectedTargetDetails, ResolveResult targetResolveResult,
-			IMethod method, IParameter parameter, TranslatedExpression arg, ref List<IParameter> expectedParameters,
+			IMethod method, IParameter parameter, TranslatedExpression paramsArgument, ref List<IParameter> expectedParameters,
 			ref List<TranslatedExpression> arguments)
 		{
-			if (CheckArgument(out int length, out IType elementType))
+			var expressionBuilder = this.expressionBuilder;
+			if (ExtractArguments(out IType elementType, out var expandedParameters, out var expandedArguments))
 			{
-				var expandedParameters = new List<IParameter>(expectedParameters);
-				var expandedArguments = new List<TranslatedExpression>(arguments);
-				if (length > 0)
-				{
-					var arrayElements = ((ArrayCreateExpression)arg.Expression).Initializer.Elements.ToArray();
-					for (int j = 0; j < length; j++)
-					{
-						expandedParameters.Add(new DefaultParameter(elementType, parameter.Name + j));
-						if (j < arrayElements.Length)
-							expandedArguments.Add(new TranslatedExpression(arrayElements[j]));
-						else
-							expandedArguments.Add(expressionBuilder.GetDefaultValueExpression(elementType).WithoutILInstruction());
-					}
-				}
+				expandedParameters.InsertRange(0, expectedParameters);
+				expandedArguments.InsertRange(0, arguments);
 				if (IsUnambiguousCall(expectedTargetDetails, method, targetResolveResult, Empty<IType>.Array,
 					expandedArguments.SelectArray(a => a.ResolveResult), argumentNames: null,
 					firstOptionalArgumentIndex: -1, out _,
@@ -1036,30 +1074,52 @@ namespace ICSharpCode.Decompiler.CSharp
 			}
 			return false;
 
-			bool CheckArgument(out int len, out IType t)
+			bool ExtractArguments(out IType elementType, out List<IParameter> parameters, out List<TranslatedExpression> arguments)
 			{
-				len = 0;
-				t = null;
-				if (arg.ResolveResult is CSharpInvocationResolveResult csirr &&
-					csirr.Arguments.Count == 0 && csirr.Member is IMethod emptyMethod &&
-					emptyMethod.IsStatic &&
-					"System.Array.Empty" == emptyMethod.FullName &&
-					emptyMethod.TypeArguments.Count == 1)
+				elementType = null;
+				parameters = null;
+				arguments = null;
+				switch (paramsArgument.ResolveResult)
 				{
-					t = emptyMethod.TypeArguments[0];
-					return true;
+					case CSharpInvocationResolveResult { Member: IMethod method, Arguments: var args }:
+						// match System.Array.Empty<T>()
+						if (args is [] && method is { IsStatic: true, FullName: "System.Array.Empty", TypeArguments: [var type] })
+						{
+							elementType = type;
+							arguments = new();
+							parameters = new();
+							return true;
+						}
+						// match System.ReadOnlySpan<T>..ctor(ref readonly T)
+						if (paramsArgument.Expression is ObjectCreateExpression oce
+							&& method is {
+								IsConstructor: true,
+								Parameters: [{ ReferenceKind: ReferenceKind.RefReadOnly, Type: ByReferenceType { ElementType: var paramType } }],
+								DeclaringType: { TypeArguments: [var type2] } declaringType
+							}
+							&& declaringType.IsKnownType(KnownTypeCode.ReadOnlySpanOfT)
+							&& paramType.Equals(type2))
+						{
+							elementType = type2;
+							arguments = new() { new TranslatedExpression(oce.Arguments.Single()) };
+							parameters = new() { new DefaultParameter(type2, string.Empty) };
+							return true;
+						}
+						return false;
+					case ArrayCreateResolveResult { Type: ArrayType { ElementType: var type3 }, SizeArguments: [{ ConstantValue: int arrayLength }] }:
+						elementType = type3;
+						arguments = new(((ArrayCreateExpression)paramsArgument.Expression).Initializer.Elements.Select(e => new TranslatedExpression(e)));
+						parameters = new List<IParameter>(arrayLength);
+						for (int i = 0; i < arrayLength; i++)
+						{
+							parameters.Add(new DefaultParameter(type3, string.Empty));
+							if (arguments.Count <= i)
+								arguments.Add(new TranslatedExpression(expressionBuilder.GetDefaultValueExpression(type3).WithoutILInstruction()));
+						}
+						return true;
+					default:
+						return false;
 				}
-
-				if (arg.ResolveResult is ArrayCreateResolveResult acrr &&
-					acrr.SizeArguments.Count == 1 &&
-					acrr.SizeArguments[0].IsCompileTimeConstant &&
-					acrr.SizeArguments[0].ConstantValue is int l)
-				{
-					len = l;
-					t = ((ArrayType)acrr.Type).ElementType;
-					return true;
-				}
-				return false;
 			}
 		}
 
@@ -1088,7 +1148,8 @@ namespace ICSharpCode.Decompiler.CSharp
 			/// Add calls to AsRefReadOnly for in parameters that did not have an explicit DirectionExpression yet.
 			/// </summary>
 			EnforceExplicitIn = 8,
-			All = 0xf,
+			NoNamedArgsForPrettiness = 0x10,
+			All = 0x1f,
 		}
 
 		private CallTransformation GetRequiredTransformationsForCall(ExpectedTargetDetails expectedTargetDetails, IMethod method,
@@ -1165,7 +1226,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			bool skipTargetCast = method.Accessibility <= Accessibility.Protected && expressionBuilder.IsBaseTypeOfCurrentType(method.DeclaringTypeDefinition);
 			OverloadResolutionErrors errors;
 			while ((errors = IsUnambiguousCall(expectedTargetDetails, method, targetResolveResult, typeArguments,
-				argumentList.GetArgumentResolveResults().ToArray(), argumentList.ArgumentNames, argumentList.FirstOptionalArgumentIndex, out foundMethod,
+				argumentList.GetArgumentResolveResults().ToArray(), argumentList.GetArgumentNames(), argumentList.FirstOptionalArgumentIndex, out foundMethod,
 				out var bestCandidateIsExpandedForm)) != OverloadResolutionErrors.None || bestCandidateIsExpandedForm != argumentList.IsExpandedForm)
 			{
 				switch (errors)
@@ -1195,7 +1256,11 @@ namespace ICSharpCode.Decompiler.CSharp
 					default:
 						// TODO : implement some more intelligent algorithm that decides which of these fixes (cast args, add target, cast target, add type args)
 						// is best in this case. Additionally we should not cast all arguments at once, but step-by-step try to add only a minimal number of casts.
-						if (argumentList.FirstOptionalArgumentIndex >= 0)
+						if (argumentList.AddNamesToPrimitiveValues)
+						{
+							argumentList.AddNamesToPrimitiveValues = false;
+						}
+						else if (argumentList.FirstOptionalArgumentIndex >= 0)
 						{
 							argumentList.FirstOptionalArgumentIndex = -1;
 						}
@@ -1260,6 +1325,8 @@ namespace ICSharpCode.Decompiler.CSharp
 				transform |= CallTransformation.RequireTypeArguments;
 			if (argumentList.FirstOptionalArgumentIndex < 0)
 				transform |= CallTransformation.NoOptionalArgumentAllowed;
+			if (!argumentList.AddNamesToPrimitiveValues)
+				transform |= CallTransformation.NoNamedArgsForPrettiness;
 			return transform;
 		}
 
@@ -1405,7 +1472,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var conversions = CSharpConversions.Get(expressionBuilder.compilation);
 			IType targetType = method.ReturnType;
 			var conv = conversions.ImplicitConversion(argument.Type, targetType);
-			if (!(conv.IsUserDefined && conv.IsValid && conv.Method.Equals(method)))
+			if (!(conv.IsUserDefined && conv.IsValid && conv.Method.Equals(method, NormalizeTypeVisitor.TypeErasure)))
 			{
 				// implicit conversion to targetType isn't directly possible, so first insert a cast to the argument type
 				argument = argument.ConvertTo(method.Parameters[0].Type, expressionBuilder);
@@ -1744,9 +1811,14 @@ namespace ICSharpCode.Decompiler.CSharp
 			{
 				while (IsUnambiguousCall(expectedTargetDetails, method, null, Empty<IType>.Array,
 					argumentList.GetArgumentResolveResults().ToArray(),
-					argumentList.ArgumentNames, argumentList.FirstOptionalArgumentIndex, out _,
+					argumentList.GetArgumentNames(), argumentList.FirstOptionalArgumentIndex, out _,
 					out var bestCandidateIsExpandedForm) != OverloadResolutionErrors.None || bestCandidateIsExpandedForm != argumentList.IsExpandedForm)
 				{
+					if (argumentList.AddNamesToPrimitiveValues)
+					{
+						argumentList.AddNamesToPrimitiveValues = false;
+						continue;
+					}
 					if (argumentList.FirstOptionalArgumentIndex >= 0)
 					{
 						argumentList.FirstOptionalArgumentIndex = -1;
@@ -2007,6 +2079,10 @@ namespace ICSharpCode.Decompiler.CSharp
 					}
 					break;
 				}
+				if (result is MethodGroupResolveResult mgrr)
+				{
+					result = mgrr.WithChosenMethod(method);
+				}
 				return (currentTarget, addTypeArguments, method.Name, result);
 			}
 		}
@@ -2033,7 +2109,6 @@ namespace ICSharpCode.Decompiler.CSharp
 
 			if (isExtensionMethodReference)
 			{
-				var resolver = this.resolver.WithCurrentUsingScope(this.expressionBuilder.statementBuilder.decompileRun.UsingScope.Resolve(this.resolver.Compilation));
 				result = resolver.ResolveMemberAccess(target, method.Name, typeArguments, NameLookupMode.InvocationTarget) as MethodGroupResolveResult;
 				if (result == null)
 					return false;

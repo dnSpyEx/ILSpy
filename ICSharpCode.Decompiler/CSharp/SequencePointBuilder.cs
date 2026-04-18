@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2017 Daniel Grunwald
+// Copyright (c) 2017 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 
@@ -545,7 +544,6 @@ namespace ICSharpCode.Decompiler.CSharp
 					hidden.SetHidden();
 					newList.Add(hidden);
 				}
-
 
 				List<int> sequencePointCandidates = function.SequencePointCandidates;
 				int currSPCandidateIndex = 0;

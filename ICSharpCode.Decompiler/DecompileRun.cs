@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Siegfried Pammer
+// Copyright (c) 2018 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -24,6 +24,7 @@ using System.Threading;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.CSharp.TypeSystem;
+
 using ICSharpCode.Decompiler.Documentation;
 using ICSharpCode.Decompiler.TypeSystem;
 using ICSharpCode.Decompiler.Util;
@@ -32,41 +33,27 @@ namespace ICSharpCode.Decompiler
 {
 	internal class DecompileRun
 	{
-		public HashSet<string> DefinedSymbols { get; } = new HashSet<string>();
-		public HashSet<string> Namespaces { get; } = new HashSet<string>();
+		public HashSet<string> DefinedSymbols { get;  } = new HashSet<string>();
+		public HashSet<string> Namespaces { get; set; } = new HashSet<string>();
 		public CancellationToken CancellationToken => Context.CancellationToken;
 		public DecompilerSettings Settings => Context.Settings;
 		public IDocumentationProvider DocumentationProvider { get; set; }
 		public Dictionary<ITypeDefinition, RecordDecompiler> RecordDecompilers { get; } = new Dictionary<ITypeDefinition, RecordDecompiler>();
 		public Dictionary<ITypeDefinition, bool> TypeHierarchyIsKnown { get; } = new();
 
-		public UsingScope UsingScope => CreateUsingScope(Namespaces);
+		public UsingScope UsingScope { get; set; }
 
 		public DecompilerContext Context { get; }
 
-		public DecompileRun(DecompilerContext context)
+		public DecompileRun(DecompilerContext context, UsingScope usingScope)
 		{
 			this.Context = context ?? throw new ArgumentNullException(nameof(context));
+			this.UsingScope = usingScope ?? throw new ArgumentNullException(nameof(usingScope));
 		}
 
-		UsingScope CreateUsingScope(HashSet<string> requiredNamespacesSuperset)
+		internal DecompileRun(DecompilerContext context)
 		{
-			var usingScope = new UsingScope();
-			string[] arrayForThreadSafety = new string[requiredNamespacesSuperset.Count];
-			requiredNamespacesSuperset.CopyTo(arrayForThreadSafety);
-			foreach (var ns in arrayForThreadSafety)
-			{
-				string[] parts = ns.Split('.');
-				AstType nsType = new SimpleType(parts[0]);
-				for (int i = 1; i < parts.Length; i++)
-				{
-					nsType = new MemberType { Target = nsType, MemberName = parts[i] };
-				}
-
-				if (nsType.ToTypeReference(CSharp.Resolver.NameLookupMode.TypeInUsingDeclaration) is TypeOrNamespaceReference reference)
-					usingScope.Usings.Add(reference);
-			}
-			return usingScope;
+			this.Context = context ?? throw new ArgumentNullException(nameof(context));
 		}
 
 		public void Reset()
@@ -75,6 +62,7 @@ namespace ICSharpCode.Decompiler
 			Namespaces.Clear();
 			RecordDecompilers.Clear();
 			TypeHierarchyIsKnown.Clear();
+			UsingScope = null;
 		}
 	}
 

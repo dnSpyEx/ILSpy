@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2017 Siegfried Pammer
+// Copyright (c) 2017 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -16,13 +16,11 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
 using ICSharpCode.Decompiler.IL.ControlFlow;
 using ICSharpCode.Decompiler.TypeSystem;
-using ICSharpCode.Decompiler.Util;
 
 namespace ICSharpCode.Decompiler.IL.Transforms
 {
@@ -127,16 +125,18 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 				instructions[i].AddSelfAndChildrenRecursiveILSpans(valueInst.ILSpans);
 				switchInst.Value.AddSelfAndChildrenRecursiveILSpans(valueInst.ILSpans);
 			}
-			newSwitch = BuildLiftedSwitch(nullCaseBlock, switchInst, valueInst);
+			var nullableType = ((Call)getHasValue).Method.DeclaringType;
+			newSwitch = BuildLiftedSwitch(nullCaseBlock, switchInst, new LdLoc(switchValueVar), nullableType);
 			return true;
 		}
 
-		static SwitchInstruction BuildLiftedSwitch(Block nullCaseBlock, SwitchInstruction switchInst, ILInstruction switchValue)
+		static SwitchInstruction BuildLiftedSwitch(Block nullCaseBlock, SwitchInstruction switchInst, ILInstruction switchValue, IType nullableType)
 		{
 			SwitchInstruction newSwitch = new SwitchInstruction(switchValue);
 			newSwitch.IsLifted = true;
 			newSwitch.ILSpans.AddRange(switchInst.ILSpans);
 			newSwitch.EndILSpans.AddRange(switchInst.EndILSpans);
+			newSwitch.Type = nullableType;
 			newSwitch.Sections.AddRange(switchInst.Sections);
 			newSwitch.Sections.Add(new SwitchSection { Body = new Branch(nullCaseBlock), HasNullLabel = true });
 			return newSwitch;
@@ -212,7 +212,8 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 					switchBlock.Instructions[0].AddSelfAndChildrenRecursiveILSpans(switchValue.ILSpans);
 				switchInst.Value.AddSelfAndChildrenRecursiveILSpans(switchValue.ILSpans);
 			}
-			newSwitch = BuildLiftedSwitch(nullCaseBlock, switchInst, switchValue);
+			var nullableType = ((Call)getHasValue).Method.DeclaringType;
+			newSwitch = BuildLiftedSwitch(nullCaseBlock, switchInst, switchValue, nullableType);
 			return true;
 		}
 	}

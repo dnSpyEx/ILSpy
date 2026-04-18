@@ -1,4 +1,4 @@
-﻿//
+//
 // Identifier.cs
 //
 // Author:

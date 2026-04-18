@@ -1,4 +1,4 @@
-﻿// 
+// 
 // PropertyDeclaration.cs
 //
 // Author:
@@ -80,6 +80,22 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 		public Expression ExpressionBody {
 			get { return GetChildByRole(ExpressionBodyRole); }
 			set { SetChildByRole(ExpressionBodyRole, value); }
+		}
+
+		public bool IsAutomaticProperty {
+			get {
+				if (!Getter.IsNull && !Getter.Body.IsNull)
+				{
+					return false;
+				}
+
+				if (!Setter.IsNull && !Setter.Body.IsNull)
+				{
+					return false;
+				}
+
+				return true;
+			}
 		}
 
 		public override void AcceptVisitor(IAstVisitor visitor)

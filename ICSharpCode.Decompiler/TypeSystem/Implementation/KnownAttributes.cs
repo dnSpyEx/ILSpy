@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2018 Daniel Grunwald
+// Copyright (c) 2010-2018 Daniel Grunwald
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -87,6 +87,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 
 		// Parameter attributes:
 		ParamArray,
+		ParamCollection,
 		In,
 		Out,
 		Optional,
@@ -109,14 +110,21 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		// C# 9 attributes:
 		NativeInteger,
 		PreserveBaseOverrides,
+		UnmanagedCallersOnly,
 
 		// C# 11 attributes:
-		RequiredAttribute,
+		Required,
+
+		// C# 12 attributes:
+		InlineArray,
+
+		// C# 14 attributes:
+		ExtensionMarker,
 	}
 
 	public static class KnownAttributes
 	{
-		internal const int Count = (int)KnownAttribute.RequiredAttribute + 1;
+		internal const int Count = (int)KnownAttribute.ExtensionMarker + 1;
 
 		static readonly TopLevelTypeName[] typeNames = new TopLevelTypeName[Count]{
 			default,
@@ -166,6 +174,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 			new TopLevelTypeName("System.Runtime.CompilerServices", nameof(IndexerNameAttribute)),
 			// Parameter attributes:
 			new TopLevelTypeName("System", nameof(ParamArrayAttribute)),
+			new TopLevelTypeName("System.Runtime.CompilerServices", "ParamCollectionAttribute"),
 			new TopLevelTypeName("System.Runtime.InteropServices", nameof(InAttribute)),
 			new TopLevelTypeName("System.Runtime.InteropServices", nameof(OutAttribute)),
 			new TopLevelTypeName("System.Runtime.InteropServices", nameof(OptionalAttribute)),
@@ -184,8 +193,13 @@ namespace ICSharpCode.Decompiler.TypeSystem
 			// C# 9 attributes:
 			new TopLevelTypeName("System.Runtime.CompilerServices", "NativeIntegerAttribute"),
 			new TopLevelTypeName("System.Runtime.CompilerServices", "PreserveBaseOverridesAttribute"),
+			new TopLevelTypeName("System.Runtime.InteropServices", "UnmanagedCallersOnlyAttribute"),
 			// C# 11 attributes:
 			new TopLevelTypeName("System.Runtime.CompilerServices", "RequiredMemberAttribute"),
+			// C# 12 attributes:
+			new TopLevelTypeName("System.Runtime.CompilerServices", "InlineArrayAttribute"),
+			// C# 14 attributes:
+			new TopLevelTypeName("System.Runtime.CompilerServices", "ExtensionMarkerAttribute"),
 		};
 
 		public static ref readonly TopLevelTypeName GetTypeName(this KnownAttribute attr)

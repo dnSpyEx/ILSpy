@@ -9,6 +9,8 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Threading;
 
+using dnlib.DotNet;
+
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.DebugInfo;
 using ICSharpCode.Decompiler.Disassembler;
@@ -116,10 +118,10 @@ Remarks:
 
 					return ShowIL(InputAssemblyName, output);
 				}
-				else if (DumpPackageFlag)
-				{
-					return DumpPackageAssemblies(InputAssemblyName, OutputDirectory, app);
-				}
+				// else if (DumpPackageFlag)
+				// {
+				// 	return DumpPackageAssemblies(InputAssemblyName, OutputDirectory, app);
+				// }
 				else
 				{
 					if (outputDirectorySpecified)
@@ -143,7 +145,7 @@ Remarks:
 			}
 		}
 
-		DecompilerSettings GetSettings(PEFile module)
+		DecompilerSettings GetSettings(MetadataFile module)
 		{
 			return new DecompilerSettings(LanguageVersion) {
 				ThrowOnAssemblyResolveErrors = false,
@@ -155,8 +157,8 @@ Remarks:
 
 		CSharpDecompiler GetDecompiler(string assemblyFileName)
 		{
-			var module = new PEFile(UniversalAssemblyResolver.LoadMainModule(assemblyFileName));
-			var resolver = (UniversalAssemblyResolver)module.Module.Context.AssemblyResolver;
+			var module = new MetadataFile(UniversalAssemblyResolver.LoadMainModule(assemblyFileName));
+			var resolver = (UniversalAssemblyResolver)module.Metadata.Context.AssemblyResolver;
 			foreach (var path in ReferencePaths)
 			{
 				resolver.AddSearchDirectory(path);
@@ -181,12 +183,12 @@ Remarks:
 
 		int ShowIL(string assemblyFileName, TextWriter output)
 		{
-			var module = new PEFile(assemblyFileName);
+			var module = new MetadataFile(ModuleDefMD.Load(assemblyFileName));
 			output.WriteLine($"// IL code: {module.Name}");
 			var disassembler = new ReflectionDisassembler(new PlainTextOutput(output), CancellationToken.None) {
 				ShowSequencePoints = ShowILSequencePointsFlag,
 			};
-			disassembler.WriteModuleContents(module.Module);
+			disassembler.WriteModuleContents(module.Metadata);
 			return 0;
 		}
 
@@ -206,58 +208,58 @@ Remarks:
 			return 0;
 		}
 
-		int DumpPackageAssemblies(string packageFileName, string outputDirectory, CommandLineApplication app)
-		{
-			using (var memoryMappedPackage = MemoryMappedFile.CreateFromFile(packageFileName, FileMode.Open, null, 0, MemoryMappedFileAccess.Read))
-			{
-				using (var packageView = memoryMappedPackage.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read))
-				{
-					if (!SingleFileBundle.IsBundle(packageView, out long bundleHeaderOffset))
-					{
-						app.Error.WriteLine($"Cannot dump assembiles for {packageFileName}, because it is not a single file bundle.");
-						return ProgramExitCodes.EX_DATAERR;
-					}
+		// int DumpPackageAssemblies(string packageFileName, string outputDirectory, CommandLineApplication app)
+		// {
+		// 	using (var memoryMappedPackage = MemoryMappedFile.CreateFromFile(packageFileName, FileMode.Open, null, 0, MemoryMappedFileAccess.Read))
+		// 	{
+		// 		using (var packageView = memoryMappedPackage.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read))
+		// 		{
+		// 			if (!SingleFileBundle.IsBundle(packageView, out long bundleHeaderOffset))
+		// 			{
+		// 				app.Error.WriteLine($"Cannot dump assembiles for {packageFileName}, because it is not a single file bundle.");
+		// 				return ProgramExitCodes.EX_DATAERR;
+		// 			}
+		//
+		// 			var manifest = SingleFileBundle.ReadManifest(packageView, bundleHeaderOffset);
+		// 			foreach (var entry in manifest.Entries)
+		// 			{
+		// 				Stream contents;
+		//
+		// 				if (entry.CompressedSize == 0)
+		// 				{
+		// 					contents = new UnmanagedMemoryStream(packageView.SafeMemoryMappedViewHandle, entry.Offset, entry.Size);
+		// 				}
+		// 				else
+		// 				{
+		// 					Stream compressedStream = new UnmanagedMemoryStream(packageView.SafeMemoryMappedViewHandle, entry.Offset, entry.CompressedSize);
+		// 					Stream decompressedStream = new MemoryStream((int)entry.Size);
+		// 					using (var deflateStream = new DeflateStream(compressedStream, CompressionMode.Decompress))
+		// 					{
+		// 						deflateStream.CopyTo(decompressedStream);
+		// 					}
+		//
+		// 					if (decompressedStream.Length != entry.Size)
+		// 					{
+		// 						app.Error.WriteLine($"Corrupted single-file entry '${entry.RelativePath}'. Declared decompressed size '${entry.Size}' is not the same as actual decompressed size '${decompressedStream.Length}'.");
+		// 						return ProgramExitCodes.EX_DATAERR;
+		// 					}
+		//
+		// 					decompressedStream.Seek(0, SeekOrigin.Begin);
+		// 					contents = decompressedStream;
+		// 				}
+		//
+		// 				using (var fileStream = File.Create(Path.Combine(outputDirectory, entry.RelativePath)))
+		// 				{
+		// 					contents.CopyTo(fileStream);
+		// 				}
+		// 			}
+		// 		}
+		// 	}
+		//
+		// 	return 0;
+		// }
 
-					var manifest = SingleFileBundle.ReadManifest(packageView, bundleHeaderOffset);
-					foreach (var entry in manifest.Entries)
-					{
-						Stream contents;
-
-						if (entry.CompressedSize == 0)
-						{
-							contents = new UnmanagedMemoryStream(packageView.SafeMemoryMappedViewHandle, entry.Offset, entry.Size);
-						}
-						else
-						{
-							Stream compressedStream = new UnmanagedMemoryStream(packageView.SafeMemoryMappedViewHandle, entry.Offset, entry.CompressedSize);
-							Stream decompressedStream = new MemoryStream((int)entry.Size);
-							using (var deflateStream = new DeflateStream(compressedStream, CompressionMode.Decompress))
-							{
-								deflateStream.CopyTo(decompressedStream);
-							}
-
-							if (decompressedStream.Length != entry.Size)
-							{
-								app.Error.WriteLine($"Corrupted single-file entry '${entry.RelativePath}'. Declared decompressed size '${entry.Size}' is not the same as actual decompressed size '${decompressedStream.Length}'.");
-								return ProgramExitCodes.EX_DATAERR;
-							}
-
-							decompressedStream.Seek(0, SeekOrigin.Begin);
-							contents = decompressedStream;
-						}
-
-						using (var fileStream = File.Create(Path.Combine(outputDirectory, entry.RelativePath)))
-						{
-							contents.CopyTo(fileStream);
-						}
-					}
-				}
-			}
-
-			return 0;
-		}
-
-		IDebugInfoProvider TryLoadPDB(PEFile module)
+		IDebugInfoProvider TryLoadPDB(MetadataFile module)
 		{
 			return null;
 		}

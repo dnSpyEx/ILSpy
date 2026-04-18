@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\..\..\DnSpyCommon.props" />
@@ -24,12 +23,12 @@
     <GenerateSBOM>true</GenerateSBOM>
 
     <NeutralLanguage>en-US</NeutralLanguage>
-    <Version>9.1.0.0</Version>
+    <Version>10.0.0.0</Version>
 
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>ICSharpCode.Decompiler.snk</AssemblyOriginatorKeyFile>
-    <NoWarn>1701;1702;1591;1573</NoWarn>
+    <NoWarn>$(NoWarn);1701;1702;1591;1573</NoWarn>
     <WarningsAsErrors>nullable</WarningsAsErrors>
     <NoWarn>CA1033;CA2002</NoWarn>
 
@@ -61,9 +60,10 @@
   <ItemGroup>
     <!--Versions must match the Roslyn packages' references-->
     <PackageReference Include="Humanizer.Core" Version="2.14.1" />
-    <PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
+    <PackageReference Include="System.Collections.Immutable" Version="9.0.0" />
     <!-- Hack to esnure the correct version of System.Memory get's copied to the output folder -->
     <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Reflection.Metadata" Version="9.0.0" />
     <ProjectReference Include="..\..\..\..\dnSpy\dnSpy.Contracts.Logic\dnSpy.Contracts.Logic.csproj" />
   </ItemGroup>
 </Project>

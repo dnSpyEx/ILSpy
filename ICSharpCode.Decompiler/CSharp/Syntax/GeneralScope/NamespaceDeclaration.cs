@@ -1,4 +1,4 @@
-﻿//
+//
 // NamespaceDeclaration.cs
 //
 // Author:

@@ -1994,7 +1994,8 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			}
 			WriteIdentifier(typeDeclaration.NameToken);
 			WriteTypeParameters(typeDeclaration.TypeParameters, CodeBracesRangeFlags.AngleBrackets);
-			if (typeDeclaration.PrimaryConstructorParameters.Count > 0) {
+			if (typeDeclaration.HasPrimaryConstructor)
+			{
 				Space(policy.SpaceBeforeMethodDeclarationParentheses);
 				WriteCommaSeparatedListInParenthesis(typeDeclaration.PrimaryConstructorParameters, policy.SpaceWithinMethodDeclarationParentheses, CodeBracesRangeFlags.Parentheses);
 			}
@@ -2988,6 +2989,36 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			}
 			SaveDeclarationOffset();
 			EndNode(enumMemberDeclaration);
+		}
+
+		public virtual void VisitExtensionDeclaration(ExtensionDeclaration extensionDeclaration)
+		{
+			StartNode(extensionDeclaration);
+			WriteAttributes(extensionDeclaration.Attributes);
+			WriteModifiers(extensionDeclaration.ModifierTokens, extensionDeclaration.NameToken);
+			WriteKeyword(ExtensionDeclaration.ExtensionKeywordRole);
+			WriteTypeParameters(extensionDeclaration.TypeParameters, CodeBracesRangeFlags.AngleBrackets);
+			Space(policy.SpaceBeforeMethodDeclarationParentheses);
+			WriteCommaSeparatedListInParenthesis(extensionDeclaration.ReceiverParameters, policy.SpaceWithinMethodDeclarationParentheses, CodeBracesRangeFlags.Parentheses);
+			foreach (Constraint constraint in extensionDeclaration.Constraints)
+			{
+				constraint.AcceptVisitor(this);
+			}
+			var braceHelper = OpenBrace(policy.ClassBraceStyle, CodeBracesRangeFlags.TypeBraces);
+			bool first = true;
+			foreach (var member in extensionDeclaration.Members)
+			{
+				if (!first)
+				{
+					for (int i = 0; i < policy.MinimumBlankLinesBetweenMembers; i++)
+						NewLine();
+				}
+				first = false;
+				member.AcceptVisitor(this);
+			}
+			CloseBrace(policy.ClassBraceStyle, braceHelper, true);
+			NewLine();
+			EndNode(extensionDeclaration);
 		}
 
 		public virtual void VisitEventDeclaration(EventDeclaration eventDeclaration)

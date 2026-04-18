@@ -345,9 +345,14 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 				if (context.CalculateILSpans)
 					inst.AddSelfAndChildrenRecursiveILSpans(replacement2.ILSpans);
 				inst.ReplaceWith(replacement2);
+				replacement2.AcceptVisitor(this);
 				return;
 			}
 			base.VisitCall(inst);
+			if (context.Settings.InlineArrays && InlineArrayTransform.RunOnExpression(inst, context))
+			{
+				return;
+			}
 			TransformAssignment.HandleCompoundAssign(inst, context);
 		}
 
@@ -359,27 +364,16 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 
 		protected internal override void VisitNewObj(NewObj inst)
 		{
-			Block block;
 			if (TransformSpanTCtorContainingStackAlloc(inst, out ILInstruction locallocSpan))
 			{
 				context.Step("new Span<T>(stackalloc) -> stackalloc Span<T>", inst);
 				if (context.CalculateILSpans)
 					locallocSpan.ILSpans.AddRange(inst.ILSpans);
 				inst.ReplaceWith(locallocSpan);
-				block = null;
-				ILInstruction stmt = locallocSpan;
-				while (stmt.Parent != null)
-				{
-					if (stmt.Parent is Block b)
-					{
-						block = b;
-						break;
-					}
-					stmt = stmt.Parent;
-				}
+				ILInstruction stmt = Block.GetContainingStatement(locallocSpan);
 				// Special case to eliminate extra store
 				if (stmt.GetNextSibling() is StLoc storeStmt && storeStmt.Value is LdLoc)
-					ILInlining.InlineIfPossible(block, stmt.ChildIndex, context);
+					ILInlining.InlineIfPossible((Block)stmt.Parent, stmt.ChildIndex, context);
 				return;
 			}
 			if (TransformArrayInitializers.TransformSpanTArrayInitialization(inst, context, out var replacement))
@@ -610,7 +604,10 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			inst.Condition.AcceptVisitor(this);
 
 			if (new NullableLiftingTransform(context).Run(inst))
+			{
+				context.Step("NullableLiftingTransform", inst);
 				return;
+			}
 
 			if (TransformDynamicAddAssignOrRemoveAssign(inst))
 				return;

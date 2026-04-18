@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -78,7 +78,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		/// Constructs a FullTypeName by parsing the given reflection name.
 		/// Note that FullTypeName can only represent type definition names. If the reflection name
 		/// might refer to a parameterized type or array etc., use
-		/// <see cref="ReflectionHelper.ParseReflectionName(string)"/> instead.
+		/// <see cref="ReflectionHelper.ParseReflectionName(string, ITypeResolveContext)"/> instead.
 		/// </summary>
 		/// <remarks>
 		/// Expected syntax: <c>NamespaceName '.' TopLevelTypeName ['`'#] { '+' NestedTypeName ['`'#] }</c>

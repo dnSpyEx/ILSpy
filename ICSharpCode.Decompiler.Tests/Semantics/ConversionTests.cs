@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -33,14 +33,33 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 {
 	// assign short names to the fake reflection types
 	using C = Conversion;
-	using dynamic = ICSharpCode.Decompiler.TypeSystem.ReflectionHelper.Dynamic;
-	using nint = ICSharpCode.Decompiler.TypeSystem.ReflectionHelper.NInt;
-	using nuint = ICSharpCode.Decompiler.TypeSystem.ReflectionHelper.NUInt;
-	using Null = ICSharpCode.Decompiler.TypeSystem.ReflectionHelper.Null;
+	using dynamic = ConversionTest.Dynamic;
+	using nint = ConversionTest.NInt;
+	using nuint = ConversionTest.NUInt;
 
 	[TestFixture, Parallelizable(ParallelScope.All)]
 	public unsafe class ConversionTest
 	{
+		/// <summary>
+		/// A reflection class used to represent <c>null</c>.
+		/// </summary>
+		public sealed class Null { }
+
+		/// <summary>
+		/// A reflection class used to represent <c>dynamic</c>.
+		/// </summary>
+		public sealed class Dynamic { }
+
+		/// <summary>
+		/// A reflection class used to represent <c>nint</c>.
+		/// </summary>
+		public sealed class NInt { }
+
+		/// <summary>
+		/// A reflection class used to represent <c>nuint</c>.
+		/// </summary>
+		public sealed class NUInt { }
+
 		CSharpConversions conversions;
 		ICompilation compilation;
 
@@ -53,17 +72,37 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 			conversions = new CSharpConversions(compilation);
 		}
 
+		public class ReplaceSpecialTypesVisitor : TypeVisitor
+		{
+			public override IType VisitTypeDefinition(ITypeDefinition type)
+			{
+				switch (type.FullName)
+				{
+					case "ICSharpCode.Decompiler.Tests.Semantics.ConversionTest.Dynamic":
+						return SpecialType.Dynamic;
+					case "ICSharpCode.Decompiler.Tests.Semantics.ConversionTest.Null":
+						return SpecialType.NullType;
+					case "ICSharpCode.Decompiler.Tests.Semantics.ConversionTest.NInt":
+						return SpecialType.NInt;
+					case "ICSharpCode.Decompiler.Tests.Semantics.ConversionTest.NUInt":
+						return SpecialType.NUInt;
+					default:
+						return base.VisitTypeDefinition(type);
+				}
+			}
+		}
+
 		Conversion ImplicitConversion(Type from, Type to)
 		{
-			IType from2 = compilation.FindType(from);
-			IType to2 = compilation.FindType(to);
+			IType from2 = compilation.FindType(from).AcceptVisitor(new ReplaceSpecialTypesVisitor());
+			IType to2 = compilation.FindType(to).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			return conversions.ImplicitConversion(from2, to2);
 		}
 
 		Conversion ExplicitConversion(Type from, Type to)
 		{
-			IType from2 = compilation.FindType(from);
-			IType to2 = compilation.FindType(to);
+			IType from2 = compilation.FindType(from).AcceptVisitor(new ReplaceSpecialTypesVisitor());
+			IType to2 = compilation.FindType(to).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			return conversions.ExplicitConversion(from2, to2);
 		}
 
@@ -173,6 +212,16 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 			Assert.That(ImplicitConversion(typeof(bool?), typeof(float?)), Is.EqualTo(C.None));
 			Assert.That(ImplicitConversion(typeof(float?), typeof(double?)), Is.EqualTo(C.ImplicitLiftedNumericConversion));
 			Assert.That(ImplicitConversion(typeof(float?), typeof(decimal?)), Is.EqualTo(C.None));
+		}
+
+		[Test]
+		public void NullableEnumerationConversion()
+		{
+			ResolveResult zero = new ConstantResolveResult(compilation.FindType(KnownTypeCode.Int32), 0);
+			ResolveResult one = new ConstantResolveResult(compilation.FindType(KnownTypeCode.Int32), 1);
+			C implicitEnumerationConversion = C.EnumerationConversion(true, true);
+			Assert.That(conversions.ImplicitConversion(zero, compilation.FindType(typeof(StringComparison?))), Is.EqualTo(implicitEnumerationConversion));
+			Assert.That(conversions.ImplicitConversion(one, compilation.FindType(typeof(StringComparison?))), Is.EqualTo(C.None));
 		}
 
 		[Test]
@@ -371,7 +420,6 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 			Assert.That(ExplicitConversion(typeof(nuint), typeof(UIntPtr)), Is.EqualTo(C.IdentityConversion));
 		}
 
-
 		[Test]
 		public void NIntEnumConversion()
 		{
@@ -390,7 +438,6 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 			Assert.That(!IntegerLiteralConversion(uint.MaxValue, typeof(nint)));
 			Assert.That(!IntegerLiteralConversion(long.MaxValue, typeof(nint)));
 		}
-
 
 		[Test]
 		public void IntegerLiteralToNUIntConversions()
@@ -480,6 +527,17 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 			Assert.That(c.Method.FullName, Is.EqualTo("System.DateTimeOffset.op_Implicit"));
 
 			Assert.That(ImplicitConversion(typeof(DateTimeOffset), typeof(DateTime)), Is.EqualTo(C.None));
+
+			ITypeDefinition classImplementingIDisposable = compilation.FindType(typeof(ClassImplementingIDisposable)).GetDefinition();
+			ITypeDefinition genericStructWithIDisposableConstraintAndImplicitConversion = compilation.FindType(typeof(GenericStructWithIDisposableConstraintAndImplicitConversion<>)).GetDefinition();
+			IType genericStructIDisposableInstance = new ParameterizedType(genericStructWithIDisposableConstraintAndImplicitConversion, ImmutableArray.Create(compilation.FindType(typeof(IDisposable))));
+
+			// C => S<I>
+			Conversion c2 = conversions.ImplicitConversion(classImplementingIDisposable, genericStructIDisposableInstance);
+			Assert.That(c2.IsImplicit && c2.IsUserDefined);
+			Assert.That(c2.Method.FullName, Is.EqualTo("ICSharpCode.Decompiler.Tests.TypeSystem.GenericStructWithIDisposableConstraintAndImplicitConversion.op_Implicit"));
+
+			Assert.That(conversions.ImplicitConversion(genericStructIDisposableInstance, classImplementingIDisposable), Is.EqualTo(C.None));
 		}
 
 		[Test]
@@ -499,9 +557,9 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 
 		bool IntegerLiteralConversion(object value, Type to)
 		{
-			IType fromType = compilation.FindType(value.GetType());
+			IType fromType = compilation.FindType(value.GetType()).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			ConstantResolveResult crr = new ConstantResolveResult(fromType, value);
-			IType to2 = compilation.FindType(to);
+			IType to2 = compilation.FindType(to).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			return conversions.ImplicitConversion(crr, to2).IsValid;
 		}
 
@@ -577,18 +635,18 @@ namespace ICSharpCode.Decompiler.Tests.Semantics
 
 		int BetterConversion(Type s, Type t1, Type t2)
 		{
-			IType sType = compilation.FindType(s);
-			IType t1Type = compilation.FindType(t1);
-			IType t2Type = compilation.FindType(t2);
+			IType sType = compilation.FindType(s).AcceptVisitor(new ReplaceSpecialTypesVisitor());
+			IType t1Type = compilation.FindType(t1).AcceptVisitor(new ReplaceSpecialTypesVisitor());
+			IType t2Type = compilation.FindType(t2).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			return conversions.BetterConversion(sType, t1Type, t2Type);
 		}
 
 		int BetterConversion(object value, Type t1, Type t2)
 		{
-			IType fromType = compilation.FindType(value.GetType());
+			IType fromType = compilation.FindType(value.GetType()).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			ConstantResolveResult crr = new ConstantResolveResult(fromType, value);
-			IType t1Type = compilation.FindType(t1);
-			IType t2Type = compilation.FindType(t2);
+			IType t1Type = compilation.FindType(t1).AcceptVisitor(new ReplaceSpecialTypesVisitor());
+			IType t2Type = compilation.FindType(t2).AcceptVisitor(new ReplaceSpecialTypesVisitor());
 			return conversions.BetterConversion(crr, t1Type, t2Type);
 		}
 
@@ -1148,7 +1206,6 @@ class Test {
 			Assert.That(c.IsValid);
 			Assert.That(c.IsUserDefined);
 		}
-
 
 		[Test]
 		public void UserDefined_CanUseLiftedEvenIfReturnTypeAlreadyNullable()

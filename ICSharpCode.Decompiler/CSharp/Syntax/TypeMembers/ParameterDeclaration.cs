@@ -1,4 +1,4 @@
-﻿//
+//
 // ParameterDeclarationExpression.cs
 //
 // Author:

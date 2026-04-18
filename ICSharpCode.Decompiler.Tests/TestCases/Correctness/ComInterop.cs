@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
@@ -15,7 +15,6 @@ namespace ICSharpCode.Decompiler.Tests.TestCases.Correctness
 			Console.WriteLine(Marshal.GetComSlotForMethodInfo(typeof(IMixedPropsAndMethods).GetEvent("MyEvent1").AddMethod));
 			Console.WriteLine(Marshal.GetComSlotForMethodInfo(typeof(IMixedPropsAndMethods).GetEvent("MyEvent1").RemoveMethod));
 		}
-
 
 		[Guid("761618B8-3994-449A-A96B-F1FF2795EA85")]
 		[ComImport]

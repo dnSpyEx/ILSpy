@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -13,6 +14,7 @@ using dnSpy.Contracts.Decompiler;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.CSharp.Transforms;
+using ICSharpCode.Decompiler.CSharp.TypeSystem;
 using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.IL.Transforms;
 using ICSharpCode.Decompiler.Metadata;
@@ -107,11 +109,26 @@ namespace ICSharpCode.Decompiler.CSharp
 					typeSystem.MainModule.GetDefinition(context.CurrentType));
 		}
 
+		void InitializeUsingScope()
+		{
+			List<INamespace> resolvedNamespaces = new List<INamespace>();
+			foreach (var ns in currentDecompileRun.Namespaces)
+			{
+				var resolvedNamespace = typeSystem.GetNamespaceByFullName(ns);
+				if (resolvedNamespace is not null)
+					resolvedNamespaces.Add(resolvedNamespace);
+			}
+
+			currentDecompileRun.UsingScope = new UsingScope(new CSharpTypeResolveContext(typeSystem.MainModule), typeSystem.RootNamespace,
+				resolvedNamespaces.ToImmutableArray());
+		}
+
 		public void AddAssembly(ModuleDef moduleDefinition, bool decompileAsm, bool decompileMod)
 		{
 			if (decompileAsm && moduleDefinition.Assembly != null)
 			{
 				RequiredNamespaceCollector.CollectAttributeNamespacesOnlyAssembly(typeSystem.MainModule, currentDecompileRun.Namespaces);
+				InitializeUsingScope();
 				IEnumerable<CustomAttribute> customAttributes = moduleDefinition.Assembly.GetCustomAttributes();
 				if (context.Settings.SortCustomAttributes)
 					customAttributes = customAttributes.OrderBy(a => a.AttributeType.FullName);
@@ -149,6 +166,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			if (decompileMod)
 			{
 				RequiredNamespaceCollector.CollectAttributeNamespacesOnlyModule(typeSystem.MainModule, currentDecompileRun.Namespaces);
+				InitializeUsingScope();
 				IEnumerable<IAttribute> moduleAttributes = typeSystem.MainModule.GetModuleAttributes();
 				if (context.Settings.SortCustomAttributes)
 					moduleAttributes = moduleAttributes.OrderBy(a => a.AttributeType.FullName);
@@ -250,6 +268,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			if (entityDecl is not TypeDeclaration typeDecl)
 			{
 				RequiredNamespaceCollector.CollectNamespaces(tsTypeDef, typeSystem.MainModule, currentDecompileRun.Namespaces, currentCodeMappingInfo);
+				InitializeUsingScope();
 				if (entityDecl is DelegateDeclaration dd)
 				{
 					// Fix empty parameter names in delegate declarations
@@ -266,60 +285,35 @@ namespace ICSharpCode.Decompiler.CSharp
 			}
 
 			RequiredNamespaceCollector.CollectNamespacesOnlyType(tsTypeDef, currentDecompileRun.Namespaces);
+			InitializeUsingScope();
 
-			bool isRecordLike = tsTypeDef.Kind switch {
-				TypeKind.Class => (context.Settings.RecordClasses && tsTypeDef.IsRecord) || context.Settings.UsePrimaryConstructorSyntaxForNonRecordTypes,
-				TypeKind.Struct => (context.Settings.RecordStructs && tsTypeDef.IsRecord) || context.Settings.UsePrimaryConstructorSyntaxForNonRecordTypes,
+			bool isRecord = tsTypeDef.Kind switch {
+				TypeKind.Class => context.Settings.RecordClasses && tsTypeDef.IsRecord,
+				TypeKind.Struct => context.Settings.RecordStructs && tsTypeDef.IsRecord,
 				_ => false,
 			};
-			RecordDecompiler recordDecompiler = isRecordLike ? new RecordDecompiler(typeSystem, tsTypeDef, context.Settings, context.CancellationToken) : null;
+			RecordDecompiler recordDecompiler = isRecord ? new RecordDecompiler(typeSystem, tsTypeDef, context.Settings, context.CancellationToken) : null;
 			if (recordDecompiler != null)
 				currentDecompileRun.RecordDecompilers.Add(tsTypeDef, recordDecompiler);
 
-			if (recordDecompiler?.PrimaryConstructor != null)
-			{
-				foreach (var p in recordDecompiler.PrimaryConstructor.Parameters)
-				{
-					ParameterDeclaration pd = typeSystemAstBuilder.ConvertParameter(p);
-					(IProperty prop, ICSharpCode.Decompiler.TypeSystem.IField field) = recordDecompiler.GetPropertyInfoByPrimaryConstructorParameter(p);
-
-					if (prop != null)
-					{
-						var attributes = prop?.GetAttributes().Select(attr => typeSystemAstBuilder.ConvertAttribute(attr)).ToArray();
-						if (attributes?.Length > 0)
-						{
-							var section = new AttributeSection {
-								AttributeTarget = "property"
-							};
-							section.Attributes.AddRange(attributes);
-							pd.Attributes.Add(section);
-						}
-					}
-					if (field != null && (recordDecompiler.FieldIsGenerated(field) || tsTypeDef.IsRecord))
-					{
-						var attributes = field.GetAttributes()
-							.Where(a => !PatternStatementTransform.attributeTypesToRemoveFromAutoProperties.Contains(a.AttributeType.FullName))
-							.Select(attr => typeSystemAstBuilder.ConvertAttribute(attr)).ToArray();
-						if (attributes.Length > 0)
-						{
-							var section = new AttributeSection {
-								AttributeTarget = "field"
-							};
-							section.Attributes.AddRange(attributes);
-							pd.Attributes.Add(section);
-						}
-					}
-					typeDecl.PrimaryConstructorParameters.Add(pd);
-				}
-			}
-
 			// With C# 9 records, the relative order of fields and properties matters:
-			if (!(isRecordLike && tsTypeDef.IsRecord))
+			if (!isRecord)
 			{
 				AddTypeMembers(typeDecl, typeDef);
 			}
 			else
 			{
+				// if (context.Settings.ExtensionMembers && tsTypeDef.ExtensionInfo is not null)
+				// {
+				// 	foreach (var group in tsTypeDef.ExtensionInfo.ExtensionGroups)
+				// 	{
+				// 		var ext = (ExtensionDeclaration)typeSystemAstBuilder.ConvertExtension(group);
+				// 		DoDecompileExtensionMembers(ext, group.Marker, tsTypeDef.ExtensionInfo);
+				//
+				// 		typeDecl.Members.Add(ext);
+				// 	}
+				// }
+
 				foreach (var type in GetNestedTypes(typeDef))
 				{
 					if (!CSharpDecompiler.MemberIsHidden(type, context.Settings))
@@ -340,8 +334,8 @@ namespace ICSharpCode.Decompiler.CSharp
 					{
 						if (tsTypeDef.Kind == TypeKind.Enum && !field.IsConst)
 							continue;
-						if (recordDecompiler?.FieldIsGenerated(field) == true)
-							continue;
+						// if (recordDecompiler?.FieldIsGenerated(field) == true)
+						// 	continue;
 						typeDecl.Members.Add(CreateField((FieldDef)field.MetadataToken));
 					}
 					else if (fieldOrProperty is IProperty property)
@@ -372,7 +366,7 @@ namespace ICSharpCode.Decompiler.CSharp
 					{
 						var memberDecl = CreateMethod((MethodDef)method.MetadataToken);
 						typeDecl.Members.Add(memberDecl);
-						typeDecl.Members.AddRange(AddInterfaceImplHelpers(memberDecl, method, typeSystemAstBuilder));
+						typeDecl.Members.AddRange(CSharpDecompiler.AddInterfaceImplHelpers(typeSystem.MainModule, memberDecl, method, typeSystemAstBuilder));
 					}
 				}
 			}
@@ -389,7 +383,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			}
 			if (context.Settings.RequiredMembers)
 			{
-				CSharpDecompiler.RemoveAttribute(typeDecl, KnownAttribute.RequiredAttribute);
+				CSharpDecompiler.RemoveAttribute(typeDecl, KnownAttribute.Required);
 			}
 			if (typeDecl.ClassType == ClassType.Enum)
 			{
@@ -455,6 +449,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var tsMethod = typeSystem.MainModule.GetDefinition(methodDef);
 
 			RequiredNamespaceCollector.CollectNamespaces(tsMethod, typeSystem.MainModule, currentDecompileRun.Namespaces, currentCodeMappingInfo);
+			InitializeUsingScope();
 
 			var methodDecl = tsMethod.IsAccessor ? typeSystemAstBuilder.ConvertMethod(tsMethod) : typeSystemAstBuilder.ConvertEntity(tsMethod);
 
@@ -617,7 +612,7 @@ namespace ICSharpCode.Decompiler.CSharp
 
 						var memberDecl = CreateMethod(methodDef);
 						astType.Members.Add(memberDecl);
-						astType.Members.AddRange(AddInterfaceImplHelpers(memberDecl, typeSystem.MainModule.GetDefinition(methodDef), typeSystemAstBuilder));
+						astType.Members.AddRange(CSharpDecompiler.AddInterfaceImplHelpers(typeSystem.MainModule, memberDecl, typeSystem.MainModule.GetDefinition(methodDef), typeSystemAstBuilder));
 					}
 					break;
 
@@ -659,6 +654,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var tsField = typeSystem.MainModule.GetDefinition(fieldDef);
 
 			RequiredNamespaceCollector.CollectNamespaces(tsField, typeSystem.MainModule, currentDecompileRun.Namespaces, currentCodeMappingInfo);
+			InitializeUsingScope();
 
 			if (currentTypeResolveContext.CurrentTypeDefinition!.Kind == TypeKind.Enum && tsField.IsConst) {
 				var enumDec = new EnumMemberDeclaration();
@@ -692,7 +688,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var fieldDecl = typeSystemAstBuilder.ConvertEntity(tsField);
 			CSharpDecompiler.SetNewModifier(fieldDecl);
 
-			if (context.Settings.RequiredMembers && CSharpDecompiler.RemoveAttribute(fieldDecl, KnownAttribute.RequiredAttribute))
+			if (context.Settings.RequiredMembers && CSharpDecompiler.RemoveAttribute(fieldDecl, KnownAttribute.Required))
 			{
 				fieldDecl.Modifiers |= Modifiers.Required;
 			}
@@ -724,6 +720,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var tsProperty = typeSystem.MainModule.GetDefinition(propertyDef);
 
 			RequiredNamespaceCollector.CollectNamespaces(tsProperty, typeSystem.MainModule, currentDecompileRun.Namespaces, currentCodeMappingInfo);
+			InitializeUsingScope();
 
 			EntityDeclaration propertyDecl = typeSystemAstBuilder.ConvertEntity(tsProperty);
 			if (tsProperty.IsExplicitInterfaceImplementation && !tsProperty.IsIndexer) {
@@ -763,7 +760,7 @@ namespace ICSharpCode.Decompiler.CSharp
 				propertyDecl.Modifiers &= ~(Modifiers.New | Modifiers.Virtual);
 				propertyDecl.Modifiers |= Modifiers.Override;
 			}
-			if (context.Settings.RequiredMembers && CSharpDecompiler.RemoveAttribute(propertyDecl, KnownAttribute.RequiredAttribute))
+			if (context.Settings.RequiredMembers && CSharpDecompiler.RemoveAttribute(propertyDecl, KnownAttribute.Required))
 			{
 				propertyDecl.Modifiers |= Modifiers.Required;
 			}
@@ -782,6 +779,7 @@ namespace ICSharpCode.Decompiler.CSharp
 			var tsEvent = typeSystem.MainModule.GetDefinition(eventDef);
 
 			RequiredNamespaceCollector.CollectNamespaces(tsEvent, typeSystem.MainModule, currentDecompileRun.Namespaces, currentCodeMappingInfo);
+			InitializeUsingScope();
 
 			bool adderHasBody = tsEvent.CanAdd && tsEvent.AddAccessor!.HasBody;
 			bool removerHasBody = tsEvent.CanRemove && tsEvent.RemoveAccessor!.HasBody;

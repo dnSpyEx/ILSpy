@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Siegfried Pammer
+// Copyright (c) 2018 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -16,12 +16,10 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-using ICSharpCode.Decompiler.FlowAnalysis;
 using ICSharpCode.Decompiler.IL.Transforms;
 using ICSharpCode.Decompiler.TypeSystem;
 
@@ -33,7 +31,7 @@ namespace ICSharpCode.Decompiler.IL.ControlFlow
 		{
 			if (!context.Settings.AwaitInCatchFinally)
 				return;
-			HashSet<BlockContainer> changedContainers = new HashSet<BlockContainer>();
+			bool needsUnreachableCodeCleanup = false;
 
 			// analyze all try-catch statements in the function
 			foreach (var tryCatch in function.Descendants.OfType<TryCatch>().ToArray())
@@ -109,7 +107,7 @@ namespace ICSharpCode.Decompiler.IL.ControlFlow
 				if (objectVariable.LoadCount != 1 || objectVariable.StoreCount > 2)
 					continue;
 
-				var beforeExceptionCaptureBlock = (Block)LocalFunctionDecompiler.GetStatement(objectVariable.LoadInstructions[0])?.Parent;
+				var beforeExceptionCaptureBlock = Block.FindClosestBlock(objectVariable.LoadInstructions[0]);
 				if (beforeExceptionCaptureBlock == null)
 					continue;
 
@@ -132,7 +130,7 @@ namespace ICSharpCode.Decompiler.IL.ControlFlow
 
 				context.StepStartGroup("Inline finally block with await", tryCatch.Handlers[0]);
 				var cfg = new ControlFlowGraph(container, context.CancellationToken);
-				changedContainers.Add(container);
+				needsUnreachableCodeCleanup = true;
 
 				var finallyContainer = new BlockContainer().WithILRange(catchBlockContainer);
 				tryCatch.ReplaceWith(new TryFinally(tryCatch.TryBlock, finallyContainer).WithILRange(tryCatch.TryBlock));
@@ -187,11 +185,16 @@ namespace ICSharpCode.Decompiler.IL.ControlFlow
 
 			context.Step("Clean up", function);
 
-			// clean up all modified containers
-			foreach (var container in changedContainers)
-				container.SortBlocks(deleteUnreachableBlocks: true);
-
-			((BlockContainer)function.Body).SortBlocks(deleteUnreachableBlocks: true);
+			if (needsUnreachableCodeCleanup)
+			{
+				// Cleaning up only the modified containers is insufficient, deleting blocks in
+				// any container can also cause other blocks in parent containers to become unreachable.
+				// So we just clean up everything.
+				foreach (var container in function.Body.Descendants.OfType<BlockContainer>())
+				{
+					container.SortBlocks(deleteUnreachableBlocks: true);
+				}
+			}
 
 			void MoveDominatedBlocksToContainer(Block newEntryPoint, Block endBlock, ControlFlowGraph graph,
 				BlockContainer targetContainer)

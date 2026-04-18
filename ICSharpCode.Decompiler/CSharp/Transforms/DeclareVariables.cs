@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -230,7 +230,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 						var v = function.RegisterVariable(
 							VariableKind.StackSlot,
 							type,
-							AssignVariableNames.GenerateVariableName(function, type,
+							AssignVariableNames.GenerateVariableName(function, type, context.DecompileRun.UsingScope,
 								stmt.Expression.Annotations.OfType<ILInstruction>()
 									.Where(AssignVariableNames.IsSupportedInstruction).FirstOrDefault(),
 								mustResolveConflicts: true)
@@ -292,6 +292,15 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 			{
 				// track loops and function bodies as scopes, for comparison with CaptureScope.
 				scopeTracking.Add((new InsertionPoint { level = nodeLevel, nextNode = node }, scope));
+			}
+			else if (node is LambdaExpression { Body: Expression expr })
+			{
+				// expression-bodied lambdas don't have a BlockStatement linking to the BlockContainer
+				scope = node.Annotation<ILFunction>()?.Body as BlockContainer;
+				if (scope != null)
+				{
+					scopeTracking.Add((new InsertionPoint { level = nodeLevel + 1, nextNode = expr }, scope));
+				}
 			}
 			else
 			{
@@ -458,7 +467,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 				// We can only insert variable declarations in blocks, but FindInsertionPoints() didn't
 				// guarantee that it finds only blocks.
 				// Fix that up now.
-				while (!(v.InsertionPoint.nextNode.Parent is BlockStatement))
+				while (!(v.InsertionPoint.nextNode.Parent is BlockStatement or LambdaExpression))
 				{
 					if (v.InsertionPoint.nextNode.Parent is ForStatement f && v.InsertionPoint.nextNode == f.Initializers.FirstOrDefault() && IsMatchingAssignment(v, out _))
 					{
@@ -633,6 +642,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 				{
 					// 'T v; SomeCall(out v);' can be combined to 'SomeCall(out T v);'
 					AstType type;
+					bool isOutVar = false;
 					if (context.Settings.AnonymousTypes && v.Type.ContainsAnonymousType())
 					{
 						type = new SimpleType("var").WithAnnotation(BoxedTextColor.Keyword);
@@ -640,6 +650,7 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 					else if (dirExpr.Annotation<UseImplicitlyTypedOutAnnotation>() != null)
 					{
 						type = new SimpleType("var").WithAnnotation(BoxedTextColor.Keyword);
+						isOutVar = true;
 					}
 					else
 					{
@@ -663,6 +674,11 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 					var ovd = new OutVarDeclarationExpression(type, name, v.ILVariable != null && v.ILVariable.Kind == VariableKind.Parameter ? BoxedTextColor.Parameter : BoxedTextColor.Local);
 					ovd.Variable.AddAnnotation(new ILVariableResolveResult(ilVariable));
 					ovd.CopyAnnotationsFrom(dirExpr);
+					if (isOutVar)
+					{
+						ovd.RemoveAnnotations<ResolveResult>();
+						ovd.AddAnnotation(new OutVarResolveResult(v.Type));
+					}
 					replacements.Add((dirExpr, ovd));
 				}
 				else
@@ -676,6 +692,17 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 					}
 					var vds = new VariableDeclarationStatement(v.ILVariable != null && v.ILVariable.Kind == VariableKind.Parameter ? BoxedTextColor.Parameter : BoxedTextColor.Local, type, v.Name, initializer);
 					vds.Variables.Single().AddAnnotation(new ILVariableResolveResult(ilVariable));
+					if (v.InsertionPoint.nextNode.Parent is LambdaExpression lambda)
+					{
+						Debug.Assert(lambda.Body is not BlockStatement);
+						lambda.Body = new BlockStatement() {
+							new ReturnStatement((Expression)lambda.Body.Detach())
+						};
+					}
+					if (v.InsertionPoint.nextNode.Parent is ReturnStatement)
+					{
+						v.InsertionPoint = v.InsertionPoint.Up();
+					}
 					Debug.Assert(v.InsertionPoint.nextNode.Role == BlockStatement.StatementRole);
 					if (v.DefaultInitialization == VariableInitKind.NeedsSkipInit)
 					{
@@ -763,11 +790,13 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 				}
 				switch (node)
 				{
-					case IfElseStatement _:  // variable declared in if condition appears in parent scope
-					case ExpressionStatement _:
+					case IfElseStatement:  // variable declared in if condition appears in parent scope
+					case ExpressionStatement:
 						return node == v.InsertionPoint.nextNode;
-					case Statement _:
+					case Statement:
 						return false; // other statements (e.g. while) don't allow variables to be promoted to parent scope
+					case LambdaExpression lambda:
+						return lambda.Body == v.InsertionPoint.nextNode;
 				}
 			}
 			return false;

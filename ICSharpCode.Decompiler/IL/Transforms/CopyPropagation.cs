@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2011-2015 Daniel Grunwald
+// Copyright (c) 2011-2015 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -93,7 +93,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 							block.Instructions[i] = copiedExpr;
 						}
 					}
-					else if (v.IsSingleDefinition && CanPerformCopyPropagation(v, copiedExpr, splitVariables))
+					else if (v.IsSingleDefinition && CanPerformCopyPropagation(v, copiedExpr, splitVariables, context.Settings))
 					{
 						DoPropagate(v, copiedExpr, block, ref i, context);
 					}
@@ -101,7 +101,7 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			}
 		}
 
-		static bool CanPerformCopyPropagation(ILVariable target, ILInstruction value, HashSet<ILVariable> splitVariables)
+		static bool CanPerformCopyPropagation(ILVariable target, ILInstruction value, HashSet<ILVariable> splitVariables, DecompilerSettings settings)
 		{
 			Debug.Assert(target.StackType == value.ResultType);
 			if (target.Type.IsSmallIntegerType())
@@ -113,14 +113,15 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			switch (value.OpCode)
 			{
 				case OpCode.LdLoca:
-				//				case OpCode.LdElema:
-				//				case OpCode.LdFlda:
 				case OpCode.LdsFlda:
 					// All address-loading instructions always return the same value for a given operand/argument combination,
 					// so they can be safely copied.
 					// ... except for LdElema and LdFlda, because those might throw an exception, and we don't want to
 					// change the place where the exception is thrown.
 					return true;
+				case OpCode.LdElema:
+				case OpCode.LdFlda:
+					return !settings.UseRefLocalsForAccurateOrderOfEvaluation;
 				case OpCode.LdLoc:
 					var v = ((LdLoc)value).Variable;
 					if (splitVariables != null && splitVariables.Contains(v))
@@ -175,6 +176,8 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 					clone.ILSpans.Clear();
 					clone.ILSpans.AddRange(expr.ILSpans);
 				}
+				// We are copying an expression from far away, reusing the ILRange would result in incorrect sequence points.
+				clone.SetILRange(new Interval());
 				expr.ReplaceWith(clone);
 			}
 			if (context.CalculateILSpans)

@@ -74,6 +74,7 @@ namespace ICSharpCode.Decompiler
 				liftNullables = false;
 				yieldReturn = false;
 				useImplicitMethodGroupConversion = false;
+				useObjectCreationOfGenericTypeParameter = false;
 			}
 			if (languageVersion < CSharp.LanguageVersion.CSharp3)
 			{
@@ -161,6 +162,7 @@ namespace ICSharpCode.Decompiler
 			{
 				fileScopedNamespaces = false;
 				recordStructs = false;
+				structDefaultConstructorsAndFieldInitializers = false;
 			}
 			if (languageVersion < CSharp.LanguageVersion.CSharp11_0)
 			{
@@ -175,16 +177,30 @@ namespace ICSharpCode.Decompiler
 			{
 				refReadOnlyParameters = false;
 				usePrimaryConstructorSyntaxForNonRecordTypes = false;
+				inlineArrays = false;
+			}
+			if (languageVersion < CSharp.LanguageVersion.CSharp13_0)
+			{
+				paramsCollections = false;
+			}
+			if (languageVersion < CSharp.LanguageVersion.CSharp14_0)
+			{
+				extensionMembers = false;
+				firstClassSpanTypes = false;
 			}
 		}
 
 		public CSharp.LanguageVersion GetMinimumRequiredVersion()
 		{
-			if (refReadOnlyParameters || usePrimaryConstructorSyntaxForNonRecordTypes)
+			if (extensionMembers || firstClassSpanTypes)
+				return CSharp.LanguageVersion.CSharp14_0;
+			if (paramsCollections)
+				return CSharp.LanguageVersion.CSharp13_0;
+			if (refReadOnlyParameters || usePrimaryConstructorSyntaxForNonRecordTypes || inlineArrays)
 				return CSharp.LanguageVersion.CSharp12_0;
 			if (scopedRef || requiredMembers || numericIntPtr || utf8StringLiterals || unsignedRightShift || checkedOperators)
 				return CSharp.LanguageVersion.CSharp11_0;
-			if (fileScopedNamespaces || recordStructs)
+			if (fileScopedNamespaces || recordStructs || structDefaultConstructorsAndFieldInitializers)
 				return CSharp.LanguageVersion.CSharp10_0;
 			if (nativeIntegers || initAccessors || functionPointers || forEachWithGetEnumeratorExtension
 				|| recordClasses || withExpressions || usePrimaryConstructorSyntax || covariantReturns
@@ -214,7 +230,7 @@ namespace ICSharpCode.Decompiler
 			if (anonymousTypes || objectCollectionInitializers || automaticProperties
 				|| queryExpressions || expressionTrees)
 				return CSharp.LanguageVersion.CSharp3;
-			if (anonymousMethods || liftNullables || yieldReturn || useImplicitMethodGroupConversion)
+			if (anonymousMethods || liftNullables || yieldReturn || useImplicitMethodGroupConversion || useObjectCreationOfGenericTypeParameter)
 				return CSharp.LanguageVersion.CSharp2;
 			return CSharp.LanguageVersion.CSharp1;
 		}
@@ -378,6 +394,24 @@ namespace ICSharpCode.Decompiler
 				if (recordStructs != value)
 				{
 					recordStructs = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool structDefaultConstructorsAndFieldInitializers = true;
+
+		/// <summary>
+		/// Use field initializers in structs.
+		/// </summary>
+		[Category("C# 10.0 / VS 2022")]
+		[Description("DecompilerSettings.StructDefaultConstructorsAndFieldInitializers")]
+		public bool StructDefaultConstructorsAndFieldInitializers {
+			get { return structDefaultConstructorsAndFieldInitializers; }
+			set {
+				if (structDefaultConstructorsAndFieldInitializers != value)
+				{
+					structDefaultConstructorsAndFieldInitializers = value;
 					OnPropertyChanged();
 				}
 			}
@@ -915,6 +949,24 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool paramsCollections = true;
+
+		/// <summary>
+		/// Support params collections.
+		/// </summary>
+		[Category("C# 13.0 / VS 2022.12")]
+		[Description("DecompilerSettings.DecompileParamsCollections")]
+		public bool ParamsCollections {
+			get { return paramsCollections; }
+			set {
+				if (paramsCollections != value)
+				{
+					paramsCollections = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool lockStatement = true;
 
 		/// <summary>
@@ -1023,6 +1075,26 @@ namespace ICSharpCode.Decompiler
 				if (useImplicitMethodGroupConversion != value)
 				{
 					useImplicitMethodGroupConversion = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool useObjectCreationOfGenericTypeParameter = true;
+
+		/// <summary>
+		/// Gets/Sets whether to use object creation expressions for generic types with <c>new()</c> constraint.
+		/// true: <c>T t = new T();</c>
+		/// false: <c>T t = Activator.CreateInstance&lt;T&gt;()</c>
+		/// </summary>
+		[Category("C# 2.0 / VS 2005")]
+		[Description("DecompilerSettings.UseObjectCreationOfGenericTypeParameter")]
+		public bool UseObjectCreationOfGenericTypeParameter {
+			get { return useObjectCreationOfGenericTypeParameter; }
+			set {
+				if (useObjectCreationOfGenericTypeParameter != value)
+				{
+					useObjectCreationOfGenericTypeParameter = value;
 					OnPropertyChanged();
 				}
 			}
@@ -1676,6 +1748,25 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool expandParamsArguments = true;
+
+		/// <summary>
+		/// Gets/Sets whether to expand <c>params</c> arguments by replacing explicit array creation
+		/// with individual values in method calls.
+		/// </summary>
+		[Category("C# 1.0 / VS .NET")]
+		[Description("DecompilerSettings.ExpandParamsArguments")]
+		public bool ExpandParamsArguments {
+			get { return expandParamsArguments; }
+			set {
+				if (expandParamsArguments != value)
+				{
+					expandParamsArguments = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool localFunctions = true;
 
 		/// <summary>
@@ -2000,6 +2091,60 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool inlineArrays = true;
+
+		/// <summary>
+		/// Gets/Sets whether C# 12.0 inline array uses should be transformed.
+		/// </summary>
+		[Category("C# 12.0 / VS 2022.8")]
+		[Description("DecompilerSettings.InlineArrays")]
+		public bool InlineArrays {
+			get { return inlineArrays; }
+			set {
+				if (inlineArrays != value)
+				{
+					inlineArrays = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool extensionMembers = true;
+
+		/// <summary>
+		/// Gets/Sets whether C# 14.0 extension members should be transformed.
+		/// </summary>
+		[Category("C# 14.0 / VS 202x.yy")]
+		[Description("DecompilerSettings.ExtensionMembers")]
+		public bool ExtensionMembers {
+			get { return extensionMembers; }
+			set {
+				if (extensionMembers != value)
+				{
+					extensionMembers = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool firstClassSpanTypes = true;
+
+		/// <summary>
+		/// Gets/Sets whether (ReadOnly)Span&lt;T&gt; should be treated like built-in types.
+		/// </summary>
+		[Category("C# 14.0 / VS 202x.yy")]
+		[Description("DecompilerSettings.FirstClassSpanTypes")]
+		public bool FirstClassSpanTypes {
+			get { return firstClassSpanTypes; }
+			set {
+				if (firstClassSpanTypes != value)
+				{
+					firstClassSpanTypes = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool separateLocalVariableDeclarations = false;
 
 		/// <summary>
@@ -2085,6 +2230,27 @@ namespace ICSharpCode.Decompiler
 			set {
 				if (removeEmptyDefaultConstructors != value) {
 					removeEmptyDefaultConstructors = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool alwaysMoveInitializer = false;
+
+		/// <summary>
+		/// If set to false (the default), the decompiler will move field initializers at the start of constructors
+		/// to their respective field declarations (TransformFieldAndConstructorInitializers) only when the declaring
+		/// type has BeforeFieldInit or the member IsConst.
+		/// If set true, the decompiler will always move them regardless of the flags.
+		/// </summary>
+		[Category("DecompilerSettings.Other")]
+		[Description("DecompilerSettings.AlwaysMoveInitializer")]
+		public bool AlwaysMoveInitializer {
+			get { return alwaysMoveInitializer; }
+			set {
+				if (alwaysMoveInitializer != value)
+				{
+					alwaysMoveInitializer = value;
 					OnPropertyChanged();
 				}
 			}
@@ -2334,6 +2500,24 @@ namespace ICSharpCode.Decompiler
 		}
 		bool alwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject = false;
 
+		bool checkForOverflowUnderflow = false;
+
+		/// <summary>
+		/// Check for overflow and underflow in operators.
+		/// </summary>
+		[Category("DecompilerSettings.Other")]
+		[Description("DecompilerSettings.CheckForOverflowUnderflow")]
+		public bool CheckForOverflowUnderflow {
+			get { return checkForOverflowUnderflow; }
+			set {
+				if (checkForOverflowUnderflow != value)
+				{
+					checkForOverflowUnderflow = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		CSharpFormattingOptions csharpFormattingOptions;
 
 		[Browsable(false)]
@@ -2394,6 +2578,7 @@ namespace ICSharpCode.Decompiler
 			if (InitAccessors != other.InitAccessors) return false;
 			if (RecordClasses != other.RecordClasses) return false;
 			if (RecordStructs != other.RecordStructs) return false;
+			if (StructDefaultConstructorsAndFieldInitializers != other.StructDefaultConstructorsAndFieldInitializers) return false;
 			if (WithExpressions != other.WithExpressions) return false;
 			if (UsePrimaryConstructorSyntax != other.UsePrimaryConstructorSyntax) return false;
 			if (FunctionPointers != other.FunctionPointers) return false;
@@ -2423,6 +2608,7 @@ namespace ICSharpCode.Decompiler
 			if (AlwaysUseBraces != other.AlwaysUseBraces) return false;
 			if (ForEachStatement != other.ForEachStatement) return false;
 			if (ForEachWithGetEnumeratorExtension != other.ForEachWithGetEnumeratorExtension) return false;
+			if (ParamsCollections != other.ParamsCollections) return false;
 			if (LockStatement != other.LockStatement) return false;
 			if (SwitchStatementOnString != other.SwitchStatementOnString) return false;
 			if (SparseIntegerSwitch != other.SparseIntegerSwitch) return false;
@@ -2430,6 +2616,7 @@ namespace ICSharpCode.Decompiler
 			if (ExtensionMethods != other.ExtensionMethods) return false;
 			if (QueryExpressions != other.QueryExpressions) return false;
 			if (UseImplicitMethodGroupConversion != other.UseImplicitMethodGroupConversion) return false;
+			if (UseObjectCreationOfGenericTypeParameter != other.UseObjectCreationOfGenericTypeParameter) return false;
 			if (AlwaysCastTargetsOfExplicitInterfaceImplementationCalls != other.AlwaysCastTargetsOfExplicitInterfaceImplementationCalls) return false;
 			if (AlwaysQualifyMemberReferences != other.AlwaysQualifyMemberReferences) return false;
 			if (AlwaysShowEnumMemberValues != other.AlwaysShowEnumMemberValues) return false;
@@ -2463,6 +2650,7 @@ namespace ICSharpCode.Decompiler
 			if (NamedArguments != other.NamedArguments) return false;
 			if (NonTrailingNamedArguments != other.NonTrailingNamedArguments) return false;
 			if (OptionalArguments != other.OptionalArguments) return false;
+			if (ExpandParamsArguments != other.ExpandParamsArguments) return false;
 			if (LocalFunctions != other.LocalFunctions) return false;
 			if (Deconstruction != other.Deconstruction) return false;
 			if (PatternMatching != other.PatternMatching) return false;
@@ -2476,10 +2664,17 @@ namespace ICSharpCode.Decompiler
 			if (RemoveDeadStores != other.RemoveDeadStores) return false;
 			if (ForStatement != other.ForStatement) return false;
 			if (DoWhileStatement != other.DoWhileStatement) return false;
+			if (RefReadOnlyParameters != other.RefReadOnlyParameters) return false;
+			if (UsePrimaryConstructorSyntaxForNonRecordTypes != other.UsePrimaryConstructorSyntaxForNonRecordTypes) return false;
+			if (InlineArrays != other.InlineArrays) return false;
+			if (ExtensionMembers != other.ExtensionMembers) return false;
+			if (FirstClassSpanTypes != other.FirstClassSpanTypes) return false;
 			if (SeparateLocalVariableDeclarations != other.SeparateLocalVariableDeclarations) return false;
 			if (AggressiveScalarReplacementOfAggregates != other.AggressiveScalarReplacementOfAggregates) return false;
 			if (AggressiveInlining != other.AggressiveInlining) return false;
 			if (AlwaysUseGlobal != other.AlwaysUseGlobal) return false;
+			if (RemoveEmptyDefaultConstructors != other.RemoveEmptyDefaultConstructors) return false;
+			if (AlwaysMoveInitializer != other.AlwaysMoveInitializer) return false;
 			if (TypeAddInternalModifier != other.TypeAddInternalModifier) return false;
 			if (MemberAddPrivateModifier != other.MemberAddPrivateModifier) return false;
 			if (HexadecimalNumbers != other.HexadecimalNumbers) return false;
@@ -2510,6 +2705,7 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ initAccessors.GetHashCode();
 				hashCode = (hashCode * 397) ^ recordClasses.GetHashCode();
 				hashCode = (hashCode * 397) ^ recordStructs.GetHashCode();
+				hashCode = (hashCode * 397) ^ structDefaultConstructorsAndFieldInitializers.GetHashCode();
 				hashCode = (hashCode * 397) ^ withExpressions.GetHashCode();
 				hashCode = (hashCode * 397) ^ usePrimaryConstructorSyntax.GetHashCode();
 				hashCode = (hashCode * 397) ^ functionPointers.GetHashCode();
@@ -2539,6 +2735,7 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ alwaysUseBraces.GetHashCode();
 				hashCode = (hashCode * 397) ^ forEachStatement.GetHashCode();
 				hashCode = (hashCode * 397) ^ forEachWithGetEnumeratorExtension.GetHashCode();
+				hashCode = (hashCode * 397) ^ paramsCollections.GetHashCode();
 				hashCode = (hashCode * 397) ^ lockStatement.GetHashCode();
 				hashCode = (hashCode * 397) ^ switchStatementOnString.GetHashCode();
 				hashCode = (hashCode * 397) ^ sparseIntegerSwitch.GetHashCode();
@@ -2546,6 +2743,7 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ extensionMethods.GetHashCode();
 				hashCode = (hashCode * 397) ^ queryExpressions.GetHashCode();
 				hashCode = (hashCode * 397) ^ useImplicitMethodGroupConversion.GetHashCode();
+				hashCode = (hashCode * 397) ^ useObjectCreationOfGenericTypeParameter.GetHashCode();
 				hashCode = (hashCode * 397) ^ alwaysCastTargetsOfExplicitInterfaceImplementationCalls.GetHashCode();
 				hashCode = (hashCode * 397) ^ alwaysQualifyMemberReferences.GetHashCode();
 				hashCode = (hashCode * 397) ^ alwaysShowEnumMemberValues.GetHashCode();
@@ -2579,6 +2777,7 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ namedArguments.GetHashCode();
 				hashCode = (hashCode * 397) ^ nonTrailingNamedArguments.GetHashCode();
 				hashCode = (hashCode * 397) ^ optionalArguments.GetHashCode();
+				hashCode = (hashCode * 397) ^ expandParamsArguments.GetHashCode();
 				hashCode = (hashCode * 397) ^ localFunctions.GetHashCode();
 				hashCode = (hashCode * 397) ^ deconstruction.GetHashCode();
 				hashCode = (hashCode * 397) ^ patternMatching.GetHashCode();
@@ -2592,6 +2791,11 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ removeDeadStores.GetHashCode();
 				hashCode = (hashCode * 397) ^ forStatement.GetHashCode();
 				hashCode = (hashCode * 397) ^ doWhileStatement.GetHashCode();
+				hashCode = (hashCode * 397) ^ refReadOnlyParameters.GetHashCode();
+				hashCode = (hashCode * 397) ^ usePrimaryConstructorSyntaxForNonRecordTypes.GetHashCode();
+				hashCode = (hashCode * 397) ^ inlineArrays.GetHashCode();
+				hashCode = (hashCode * 397) ^ extensionMembers.GetHashCode();
+				hashCode = (hashCode * 397) ^ firstClassSpanTypes.GetHashCode();
 				hashCode = (hashCode * 397) ^ separateLocalVariableDeclarations.GetHashCode();
 				hashCode = (hashCode * 397) ^ aggressiveScalarReplacementOfAggregates.GetHashCode();
 				hashCode = (hashCode * 397) ^ aggressiveInlining.GetHashCode();
@@ -2621,8 +2825,8 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
-
-		public DecompilerSettings CopyTo(DecompilerSettings other) {
+		public DecompilerSettings CopyTo(DecompilerSettings other)
+		{
 			other.DecompilationObject0 = this.DecompilationObject0;
 			other.DecompilationObject1 = this.DecompilationObject1;
 			other.DecompilationObject2 = this.DecompilationObject2;
@@ -2634,6 +2838,7 @@ namespace ICSharpCode.Decompiler
 			other.InitAccessors = this.InitAccessors;
 			other.RecordClasses = this.RecordClasses;
 			other.RecordStructs = this.RecordStructs;
+			other.StructDefaultConstructorsAndFieldInitializers = this.StructDefaultConstructorsAndFieldInitializers;
 			other.WithExpressions = this.WithExpressions;
 			other.UsePrimaryConstructorSyntax = this.UsePrimaryConstructorSyntax;
 			other.FunctionPointers = this.FunctionPointers;
@@ -2663,6 +2868,7 @@ namespace ICSharpCode.Decompiler
 			other.AlwaysUseBraces = this.AlwaysUseBraces;
 			other.ForEachStatement = this.ForEachStatement;
 			other.ForEachWithGetEnumeratorExtension = this.ForEachWithGetEnumeratorExtension;
+			other.ParamsCollections = this.ParamsCollections;
 			other.LockStatement = this.LockStatement;
 			other.SwitchStatementOnString = this.SwitchStatementOnString;
 			other.SparseIntegerSwitch = this.SparseIntegerSwitch;
@@ -2670,6 +2876,7 @@ namespace ICSharpCode.Decompiler
 			other.ExtensionMethods = this.ExtensionMethods;
 			other.QueryExpressions = this.QueryExpressions;
 			other.UseImplicitMethodGroupConversion = this.UseImplicitMethodGroupConversion;
+			other.UseObjectCreationOfGenericTypeParameter = this.UseObjectCreationOfGenericTypeParameter;
 			other.AlwaysCastTargetsOfExplicitInterfaceImplementationCalls = this.AlwaysCastTargetsOfExplicitInterfaceImplementationCalls;
 			other.AlwaysQualifyMemberReferences = this.AlwaysQualifyMemberReferences;
 			other.AlwaysShowEnumMemberValues = this.AlwaysShowEnumMemberValues;
@@ -2703,6 +2910,7 @@ namespace ICSharpCode.Decompiler
 			other.NamedArguments = this.NamedArguments;
 			other.NonTrailingNamedArguments = this.NonTrailingNamedArguments;
 			other.OptionalArguments = this.OptionalArguments;
+			other.ExpandParamsArguments = this.ExpandParamsArguments;
 			other.LocalFunctions = this.LocalFunctions;
 			other.Deconstruction = this.Deconstruction;
 			other.PatternMatching = this.PatternMatching;
@@ -2716,6 +2924,11 @@ namespace ICSharpCode.Decompiler
 			other.RemoveDeadStores = this.RemoveDeadStores;
 			other.ForStatement = this.ForStatement;
 			other.DoWhileStatement = this.DoWhileStatement;
+			other.RefReadOnlyParameters = this.RefReadOnlyParameters;
+			other.UsePrimaryConstructorSyntaxForNonRecordTypes = this.UsePrimaryConstructorSyntaxForNonRecordTypes;
+			other.InlineArrays = this.InlineArrays;
+			other.ExtensionMembers = this.ExtensionMembers;
+			other.FirstClassSpanTypes = this.FirstClassSpanTypes;
 			other.SeparateLocalVariableDeclarations = this.SeparateLocalVariableDeclarations;
 			other.AggressiveScalarReplacementOfAggregates = this.AggressiveScalarReplacementOfAggregates;
 			other.AggressiveInlining = this.AggressiveInlining;

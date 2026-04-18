@@ -16,6 +16,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -57,10 +59,18 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 				throw new ArgumentNullException(nameof(formattingPolicy));
 
 			TypeSystemAstBuilder astBuilder = CreateAstBuilder();
+
+			if (IsExtension(symbol as ITypeDefinition, out var extensionGroup))
+			{
+				astBuilder.ShowParameterNames = true;
+			}
+			else
+			{
+				extensionGroup = default;
+			}
 			AstNode node = astBuilder.ConvertSymbol(symbol);
 			writer.StartNode(node);
-			EntityDeclaration entityDecl = node as EntityDeclaration;
-			if (entityDecl != null)
+			if (node is EntityDeclaration entityDecl)
 				PrintModifiers(entityDecl.Modifiers, writer);
 
 			if ((ConversionFlags & ConversionFlags.ShowDefinitionKeyword) == ConversionFlags.ShowDefinitionKeyword)
@@ -129,12 +139,22 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			else
 				writer.WriteIdentifier(Identifier.Create(symbol.Name), BoxedTextColor.Text);
 
-			if ((ConversionFlags & ConversionFlags.ShowParameterList) == ConversionFlags.ShowParameterList && HasParameters(symbol))
+			if (ShowParameterList(symbol))
 			{
 				writer.WriteToken(symbol.SymbolKind == SymbolKind.Indexer ? Roles.LBracket : Roles.LPar, symbol.SymbolKind == SymbolKind.Indexer ? "[" : "(", BoxedTextColor.Punctuation);
 
 				bool first = true;
-				foreach (var param in node.GetChildrenByRole(Roles.Parameter))
+				IEnumerable<ParameterDeclaration> parameters;
+				if (extensionGroup.Marker != null)
+				{
+					var subst = new TypeParameterSubstitution(extensionGroup.TypeParameters, null);
+					parameters = extensionGroup.Marker.Specialize(subst).Parameters.Select(p => astBuilder.ConvertParameter(p));
+				}
+				else
+				{
+					parameters = node.GetChildrenByRole(Roles.Parameter);
+				}
+				foreach (var param in parameters)
 				{
 					if ((ConversionFlags & ConversionFlags.ShowParameterModifiers) == 0)
 					{
@@ -214,18 +234,31 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			}
 		}
 
-		static bool HasParameters(ISymbol e)
+		bool IsExtension(ITypeDefinition? typeDef, out (IMethod Marker, IReadOnlyList<ITypeParameter> TypeParameters) extensionGroup)
+		{
+			extensionGroup = default;
+			if ((ConversionFlags & ConversionFlags.SupportExtensionDeclarations) == 0)
+				return false;
+			if (typeDef == null)
+				return false;
+			var extensionInfo = typeDef.DeclaringTypeDefinition?.ExtensionInfo ?? typeDef.DeclaringTypeDefinition?.DeclaringTypeDefinition?.ExtensionInfo;
+			return extensionInfo != null && extensionInfo.IsExtensionMarkerType(typeDef, out extensionGroup);
+		}
+
+		bool ShowParameterList(ISymbol e)
 		{
 			switch (e.SymbolKind)
 			{
-				case SymbolKind.TypeDefinition:
-					return ((ITypeDefinition)e).Kind == TypeKind.Delegate;
+				case SymbolKind.TypeDefinition when ((ITypeDefinition)e).Kind is TypeKind.Delegate:
+					return (ConversionFlags & ConversionFlags.ShowParameterList) != 0;
+				case SymbolKind.TypeDefinition when IsExtension((ITypeDefinition)e, out _):
+					return (ConversionFlags & ConversionFlags.SupportExtensionDeclarations) != 0;
 				case SymbolKind.Indexer:
 				case SymbolKind.Method:
 				case SymbolKind.Operator:
 				case SymbolKind.Constructor:
 				case SymbolKind.Destructor:
-					return true;
+					return (ConversionFlags & ConversionFlags.ShowParameterList) != 0;
 				default:
 					return false;
 			}
@@ -247,6 +280,7 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			astBuilder.SupportRecordStructs = (ConversionFlags & ConversionFlags.SupportRecordStructs) != 0;
 			astBuilder.SupportUnsignedRightShift = (ConversionFlags & ConversionFlags.SupportUnsignedRightShift) != 0;
 			astBuilder.SupportOperatorChecked = (ConversionFlags & ConversionFlags.SupportOperatorChecked) != 0;
+			astBuilder.SupportExtensionDeclarations = (ConversionFlags & ConversionFlags.SupportExtensionDeclarations) != 0;
 			return astBuilder;
 		}
 
@@ -269,8 +303,16 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 					writer.WriteToken(Roles.Dot, ".", BoxedTextColor.Punctuation);
 				}
 			}
-			writer.WriteIdentifier(node.NameToken, BoxedTextColor.Text);
-			WriteTypeParameters(node, writer, formattingPolicy);
+			if (IsExtension(typeDef, out var group))
+			{
+				writer.WriteKeyword(ExtensionDeclaration.ExtensionKeywordRole, "extension");
+				WriteTypeParameters(group.TypeParameters.Select(tp => astBuilder.ConvertTypeParameter(tp)), writer, formattingPolicy);
+			}
+			else
+			{
+				writer.WriteIdentifier(node.NameToken, BoxedTextColor.Text);
+				WriteTypeParameters(node.GetChildrenByRole(Roles.TypeParameter), writer, formattingPolicy);
+			}
 		}
 
 		void WriteMemberDeclarationName(IMember member, TokenWriter writer, CSharpFormattingOptions formattingPolicy)
@@ -282,7 +324,7 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 				ConvertType(member.DeclaringType, writer, formattingPolicy);
 				writer.WriteToken(Roles.Dot, ".", BoxedTextColor.Punctuation);
 			}
-			IType explicitInterfaceType = GetExplicitInterfaceType(member);
+			IType? explicitInterfaceType = GetExplicitInterfaceType(member);
 			string name = member.Name;
 			if (explicitInterfaceType != null)
 			{
@@ -299,11 +341,11 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 					writer.WriteKeyword(Roles.Identifier, "this");
 					break;
 				case SymbolKind.Constructor:
-					WriteQualifiedName(member.DeclaringType.Name, writer, formattingPolicy);
+					WriteQualifiedName(member.DeclaringType!.Name, writer, formattingPolicy);
 					break;
 				case SymbolKind.Destructor:
 					writer.WriteToken(DestructorDeclaration.TildeRole, "~", BoxedTextColor.Punctuation);
-					WriteQualifiedName(member.DeclaringType.Name, writer, formattingPolicy);
+					WriteQualifiedName(member.DeclaringType!.Name, writer, formattingPolicy);
 					break;
 				case SymbolKind.Operator:
 					switch (name)
@@ -372,15 +414,14 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 					writer.WriteIdentifier(Identifier.Create(name), BoxedTextColor.Text);
 					break;
 			}
-			WriteTypeParameters(node, writer, formattingPolicy);
+			WriteTypeParameters(node.GetChildrenByRole(Roles.TypeParameter), writer, formattingPolicy);
 		}
 
-		void WriteTypeParameters(EntityDeclaration node, TokenWriter writer, CSharpFormattingOptions formattingPolicy)
+		void WriteTypeParameters(IEnumerable<TypeParameterDeclaration> typeParameters, TokenWriter writer, CSharpFormattingOptions formattingPolicy)
 		{
 			if ((ConversionFlags & ConversionFlags.ShowTypeParameterList) == ConversionFlags.ShowTypeParameterList)
 			{
 				var outputVisitor = new CSharpOutputVisitor(writer, formattingPolicy);
-				IEnumerable<TypeParameterDeclaration> typeParameters = node.GetChildrenByRole(Roles.TypeParameter);
 				if ((ConversionFlags & ConversionFlags.ShowTypeParameterVarianceModifier) == 0)
 				{
 					typeParameters = typeParameters.Select(RemoveVarianceModifier);
@@ -433,7 +474,7 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			return astType.ToString();
 		}
 
-		public void ConvertType(IType type, TokenWriter writer, CSharpFormattingOptions formattingPolicy)
+		void ConvertType(IType type, TokenWriter writer, CSharpFormattingOptions formattingPolicy)
 		{
 			TypeSystemAstBuilder astBuilder = CreateAstBuilder();
 			astBuilder.AlwaysUseShortTypeNames = (ConversionFlags & ConversionFlags.UseFullyQualifiedEntityNames) != ConversionFlags.UseFullyQualifiedEntityNames;
@@ -441,7 +482,7 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 			astType.AcceptVisitor(new CSharpOutputVisitor(writer, formattingPolicy));
 		}
 
-		IType GetExplicitInterfaceType(IMember member)
+		IType? GetExplicitInterfaceType(IMember member)
 		{
 			if (member.IsExplicitInterfaceImplementation)
 			{

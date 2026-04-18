@@ -881,6 +881,8 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 
 		bool HandleRuntimeHelpersInitializeArray(Block body, int pos, ILVariable array, IType arrayType, int[] arrayLength, out ILInstruction[] values, out int foundPos)
 		{
+			values = null;
+			foundPos = -1;
 			if (MatchInitializeArrayCall(body.Instructions[pos], out var arrayInst, out var field) && arrayInst.MatchLdLoc(array))
 			{
 				if (field != null && field.InitialValue != null)
@@ -895,8 +897,6 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 					}
 				}
 			}
-			values = null;
-			foundPos = -1;
 			return false;
 		}
 

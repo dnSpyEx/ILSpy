@@ -23,11 +23,16 @@ using System.Linq;
 
 using dnSpy.Contracts.Decompiler;
 using dnSpy.Contracts.Text;
+using dnlib.DotNet;
 
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.CSharp.Syntax.PatternMatching;
 using ICSharpCode.Decompiler.Semantics;
 using ICSharpCode.Decompiler.TypeSystem;
+
+using IField = ICSharpCode.Decompiler.TypeSystem.IField;
+using IMethod = ICSharpCode.Decompiler.TypeSystem.IMethod;
+using IType = ICSharpCode.Decompiler.TypeSystem.IType;
 
 namespace ICSharpCode.Decompiler.CSharp.Transforms
 {
@@ -854,20 +859,21 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 		{
 			var parent = identifier.Parent;
 			var mrr = parent.Annotation<MemberResolveResult>();
-			var field = mrr?.Member as IField;
-			if (field == null || field.Accessibility != Accessibility.Private)
+			if (mrr?.Member is not IField field || field.Accessibility != Accessibility.Private)
 				return null;
-			foreach (var ev in field.DeclaringType.GetEvents(null, GetMemberOptions.IgnoreInheritedMembers))
+			var module = field.ParentModule as MetadataModule;
+			if (module == null)
+				return null;
+			if (module.MetadataFile.PropertyAndEventBackingFieldLookup.IsEventBackingField((FieldDef)field.MetadataToken, out var eventHandle))
 			{
-				if (CSharpDecompiler.IsEventBackingFieldName(field.Name, ev.Name, out int suffixLength) &&
-				    !Equals(currentMethod.AccessorOwner, ev))
+				var eventDef = module.ResolveEntity(eventHandle) as IEvent;
+				if (eventDef != null && currentMethod.AccessorOwner != eventDef)
 				{
 					parent.RemoveAnnotations<MemberResolveResult>();
 					parent.RemoveAnnotations<dnlib.DotNet.IField>();
-					parent.WithAnnotation(ev.MetadataToken);
-					parent.AddAnnotation(new MemberResolveResult(mrr.TargetResult, ev));
-					if (suffixLength != 0)
-						identifier.Name = identifier.Name.Substring(0, identifier.Name.Length - suffixLength);
+					parent.WithAnnotation(eventHandle);
+					parent.AddAnnotation(new MemberResolveResult(mrr.TargetResult, eventDef));
+					identifier.Name = eventDef.Name;
 					return identifier;
 				}
 			}
@@ -1008,20 +1014,14 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 			if (!m.Success)
 				return false;
 			Expression fieldExpression = m.Get<Expression>("field").Single();
-			// field name must match event name
-			switch (fieldExpression)
-			{
-				case IdentifierExpression identifier:
-					if (!CSharpDecompiler.IsEventBackingFieldName(identifier.Identifier, ev.Name, out _))
-						return false;
-					break;
-				case MemberReferenceExpression memberRef:
-					if (!CSharpDecompiler.IsEventBackingFieldName(memberRef.MemberName, ev.Name, out _))
-						return false;
-					break;
-				default:
-					return false;
-			}
+			IField eventField = fieldExpression.GetSymbol() as IField;
+			if (eventField == null)
+				return false;
+			var module = eventField.ParentModule as MetadataModule;
+			if (module == null)
+				return false;
+			if (!module.MetadataFile.PropertyAndEventBackingFieldLookup.IsEventBackingField((FieldDef)eventField.MetadataToken, out _))
+				return false;
 			var returnType = ev.ReturnType.GetResolveResult().Type;
 			var eventType = m.Get<AstType>("type").Single().GetResolveResult().Type;
 			// ignore tuple element names, dynamic and nullability
@@ -1159,9 +1159,11 @@ namespace ICSharpCode.Decompiler.CSharp.Transforms
 					return false;
 				if (fd.GetSymbol() is not IField f)
 					return false;
+				if (f.ParentModule is not MetadataModule module)
+					return false;
 				return f.Accessibility == Accessibility.Private
 					&& symbol.ReturnType.Equals(f.ReturnType)
-					&& CSharpDecompiler.IsEventBackingFieldName(f.Name, ev.Name, out _);
+					&& module.MetadataFile.PropertyAndEventBackingFieldLookup.IsEventBackingField((FieldDef)f.MetadataToken, out _);
 			}
 		}
 		#endregion

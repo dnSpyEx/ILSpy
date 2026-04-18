@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018 Daniel Grunwald
+// Copyright (c) 2018 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -126,12 +126,28 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		/// </summary>
 		RefReadOnlyParameters = 0x10000,
 		/// <summary>
-		/// Default settings: typical options for the decompiler, with all C# languages features enabled.
+		/// If this option is active, [ParamCollectionAttribute] on parameters is removed
+		/// and parameters are marked as params.
+		/// Otherwise, the attribute is preserved but the parameters are not marked
+		/// as if it was a normal parameter without any attributes.
+		/// </summary>
+		ParamsCollections = 0x20000,
+		/// <summary>
+		/// If this option is active, span types (Span&lt;T&gt; and ReadOnlySpan&lt;T&gt;) are treated like
+		/// built-in types and language rules of C# 14 and later are applied.
+		/// </summary>
+		FirstClassSpanTypes = 0x40000,
+		/// <summary>
+		/// If this option is active, extension member groups are detected, otherwise the compiler-generated nested classes are left as-is.
+		/// </summary>
+		ExtensionMembers = 0x80000,
+		/// <summary>
+		/// Default settings: typical options for the decompiler, with all C# language features enabled.
 		/// </summary>
 		Default = Dynamic | Tuple | ExtensionMethods | DecimalConstants | ReadOnlyStructsAndParameters
 			| RefStructs | UnmanagedConstraints | NullabilityAnnotations | ReadOnlyMethods
 			| NativeIntegers | FunctionPointers | ScopedRef | NativeIntegersWithoutAttribute
-			| RefReadOnlyParameters
+			| RefReadOnlyParameters | ParamsCollections | FirstClassSpanTypes | ExtensionMembers
 	}
 
 	/// <summary>
@@ -152,6 +168,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		List<IModule> referencedModules;
 
 		INamespace rootNamespace;
+		TypeSystemOptions typeSystemOptions;
 
 		public static TypeSystemOptions GetOptions(DecompilerSettings settings)
 		{
@@ -184,6 +201,12 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				typeSystemOptions |= TypeSystemOptions.NativeIntegersWithoutAttribute;
 			if (settings.RefReadOnlyParameters)
 				typeSystemOptions |= TypeSystemOptions.RefReadOnlyParameters;
+			if (settings.ParamsCollections)
+				typeSystemOptions |= TypeSystemOptions.ParamsCollections;
+			if (settings.FirstClassSpanTypes)
+				typeSystemOptions |= TypeSystemOptions.FirstClassSpanTypes;
+			if (settings.ExtensionMembers)
+				typeSystemOptions |= TypeSystemOptions.ExtensionMembers;
 			return typeSystemOptions;
 		}
 
@@ -198,6 +221,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 				throw new ArgumentNullException(nameof(mainModule));
 			maindnlibMod = mainModule.Metadata;
 			options = typeSystemOptions;
+			this.typeSystemOptions = typeSystemOptions;
 
 			// if (!(identifier == TargetFrameworkIdentifier.NET && version >= new Version(7, 0)))
 			// {
@@ -303,5 +327,7 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		{
 			return "[" + GetType().Name + " " + mainModule.AssemblyName + "]";
 		}
+
+		public TypeSystemOptions TypeSystemOptions => typeSystemOptions;
 	}
 }

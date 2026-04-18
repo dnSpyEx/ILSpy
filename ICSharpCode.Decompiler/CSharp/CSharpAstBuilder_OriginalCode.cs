@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-
-using dnlib.DotNet;
 
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.IL;
@@ -81,62 +78,6 @@ namespace ICSharpCode.Decompiler.CSharp
 			if (!entity.HasAttribute(KnownAttribute.PreserveBaseOverrides))
 				return false;
 			return true;
-		}
-
-		IEnumerable<EntityDeclaration> AddInterfaceImplHelpers(EntityDeclaration memberDecl, ICSharpCode.Decompiler.TypeSystem.IMethod method, TypeSystemAstBuilder astBuilder)
-		{
-			if (!memberDecl.GetChildByRole(EntityDeclaration.PrivateImplementationTypeRole).IsNull)
-			{
-				yield break; // cannot create forwarder for existing explicit interface impl
-			}
-			if (method.IsStatic)
-			{
-				yield break; // cannot create forwarder for static interface impl
-			}
-			if (memberDecl.HasModifier(Modifiers.Extern))
-			{
-				yield break; // cannot create forwarder for extern method
-			}
-			var genericContext = new Decompiler.TypeSystem.GenericContext(method);
-			var methodHandle = (MethodDef)method.MetadataToken;
-			foreach (var h in methodHandle.Overrides) {
-				ICSharpCode.Decompiler.TypeSystem.IMethod m = typeSystem.MainModule.ResolveMethod(h.MethodDeclaration, genericContext);
-				if (m == null || m.DeclaringType.Kind != TypeKind.Interface)
-					continue;
-				var methodDecl = new MethodDeclaration();
-				methodDecl.ReturnType = memberDecl.ReturnType.Clone();
-				methodDecl.PrivateImplementationType = astBuilder.ConvertType(m.DeclaringType);
-				methodDecl.Name = m.Name;
-				methodDecl.TypeParameters.AddRange(memberDecl.GetChildrenByRole(Roles.TypeParameter)
-												   .Select(n => (TypeParameterDeclaration)n.Clone()));
-				methodDecl.Parameters.AddRange(memberDecl.GetChildrenByRole(Roles.Parameter).Select(n => n.Clone()));
-				methodDecl.Constraints.AddRange(memberDecl.GetChildrenByRole(Roles.Constraint)
-												.Select(n => (Constraint)n.Clone()));
-
-				methodDecl.Body = new BlockStatement();
-				methodDecl.Body.AddChild(new Comment(
-					"ILSpy generated this explicit interface implementation from .override directive in " + memberDecl.Name),
-					Roles.Comment);
-
-				var member = new MemberReferenceExpression {
-					Target = new ThisReferenceExpression().WithAnnotation(methodHandle.DeclaringType),
-					MemberNameToken = Identifier.Create(memberDecl.Name).WithAnnotation(method.OriginalMember)
-				}.WithAnnotation(method.OriginalMember);
-				member.TypeArguments.AddRange(methodDecl.TypeParameters.Select(tp => new SimpleType(tp.Name)));
-
-				var forwardingCall = new InvocationExpression(member,
-					methodDecl.Parameters.Select(CSharpDecompiler.ForwardParameter)
-				).WithAnnotation(method.OriginalMember);
-				if (m.ReturnType.IsKnownType(KnownTypeCode.Void))
-				{
-					methodDecl.Body.Add(new ExpressionStatement(forwardingCall));
-				}
-				else
-				{
-					methodDecl.Body.Add(new ReturnStatement(forwardingCall));
-				}
-				yield return methodDecl;
-			}
 		}
 
 		void AddDefinesForConditionalAttributes(ILFunction function)

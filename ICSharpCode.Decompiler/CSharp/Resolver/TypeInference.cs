@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
+// Copyright (c) 2010-2013 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -654,17 +654,31 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 				return;
 			}
 			// Handle array types:
-			ArrayType arrU = U as ArrayType;
-			ArrayType arrV = V as ArrayType;
-			if (arrU != null && arrV != null && arrU.Dimensions == arrV.Dimensions)
+			U = U.TupleUnderlyingTypeOrSelf();
+			V = V.TupleUnderlyingTypeOrSelf();
+			switch ((U, V))
 			{
-				MakeExactInference(arrU.ElementType, arrV.ElementType);
-				return;
+				case (ArrayType arrU, ArrayType arrV) when arrU.Dimensions == arrV.Dimensions:
+					MakeExactInference(arrU.ElementType, arrV.ElementType);
+					return;
+				case (ArrayType arrU, ParameterizedType spanV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanV.IsKnownType(KnownTypeCode.SpanOfT):
+					MakeExactInference(arrU.ElementType, spanV.TypeArguments[0]);
+					return;
+				case (ParameterizedType spanU, ParameterizedType spanV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanU.IsKnownType(KnownTypeCode.SpanOfT) && spanV.IsKnownType(KnownTypeCode.SpanOfT):
+					MakeExactInference(spanU.TypeArguments[0], spanV.TypeArguments[0]);
+					return;
+				case (ArrayType arrU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeExactInference(arrU.ElementType, rosV.TypeArguments[0]);
+					return;
+				case (ParameterizedType spanU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanU.IsKnownType(KnownTypeCode.SpanOfT) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeExactInference(spanU.TypeArguments[0], rosV.TypeArguments[0]);
+					return;
+				case (ParameterizedType rosU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && rosU.IsKnownType(KnownTypeCode.ReadOnlySpanOfT) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeExactInference(rosU.TypeArguments[0], rosV.TypeArguments[0]);
+					return;
 			}
 			// Handle parameterized type:
-			ParameterizedType pU = U.TupleUnderlyingTypeOrSelf() as ParameterizedType;
-			ParameterizedType pV = V.TupleUnderlyingTypeOrSelf() as ParameterizedType;
-			if (pU != null && pV != null
+			if (U is ParameterizedType pU && V is ParameterizedType pV
 				&& object.Equals(pU.GenericType, pV.GenericType)
 				&& pU.TypeParameterCount == pV.TypeParameterCount)
 			{
@@ -746,21 +760,33 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 				return;
 			}
 			// Handle array types:
-			ArrayType arrU = U as ArrayType;
-			ArrayType arrV = V as ArrayType;
-			ParameterizedType pV = V.TupleUnderlyingTypeOrSelf() as ParameterizedType;
-			if (arrU != null && arrV != null && arrU.Dimensions == arrV.Dimensions)
+			V = V.TupleUnderlyingTypeOrSelf();
+			switch ((U, V))
 			{
-				MakeLowerBoundInference(arrU.ElementType, arrV.ElementType);
-				return;
-			}
-			else if (arrU != null && IsGenericInterfaceImplementedByArray(pV) && arrU.Dimensions == 1)
-			{
-				MakeLowerBoundInference(arrU.ElementType, pV.GetTypeArgument(0));
-				return;
+				case (ArrayType arrU, ArrayType arrV) when arrU.Dimensions == arrV.Dimensions:
+					MakeLowerBoundInference(arrU.ElementType, arrV.ElementType);
+					return;
+				case (ArrayType arrU, ParameterizedType spanV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanV.IsKnownType(KnownTypeCode.SpanOfT):
+					MakeLowerBoundInference(arrU.ElementType, spanV.TypeArguments[0]);
+					return;
+				case (ParameterizedType spanU, ParameterizedType spanV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanU.IsKnownType(KnownTypeCode.SpanOfT) && spanV.IsKnownType(KnownTypeCode.SpanOfT):
+					MakeLowerBoundInference(spanU.TypeArguments[0], spanV.TypeArguments[0]);
+					return;
+				case (ArrayType arrU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeLowerBoundInference(arrU.ElementType, rosV.TypeArguments[0]);
+					return;
+				case (ParameterizedType spanU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && spanU.IsKnownType(KnownTypeCode.SpanOfT) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeLowerBoundInference(spanU.TypeArguments[0], rosV.TypeArguments[0]);
+					return;
+				case (ParameterizedType rosU, ParameterizedType rosV) when compilation.TypeSystemOptions.HasFlag(TypeSystemOptions.FirstClassSpanTypes) && rosU.IsKnownType(KnownTypeCode.ReadOnlySpanOfT) && rosV.IsKnownType(KnownTypeCode.ReadOnlySpanOfT):
+					MakeLowerBoundInference(rosU.TypeArguments[0], rosV.TypeArguments[0]);
+					return;
+				case (ArrayType arrU, ParameterizedType arrIntfV) when arrIntfV.IsArrayInterfaceType() && arrU.Dimensions == 1:
+					MakeLowerBoundInference(arrU.ElementType, arrIntfV.TypeArguments[0]);
+					return;
 			}
 			// Handle parameterized types:
-			if (pV != null)
+			if (V is ParameterizedType pV)
 			{
 				ParameterizedType uniqueBaseType = null;
 				foreach (IType baseU in U.GetAllBaseTypes())
@@ -824,23 +850,6 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 				return;
 			}
 		}
-
-		static bool IsGenericInterfaceImplementedByArray(ParameterizedType rt)
-		{
-			if (rt == null || rt.TypeParameterCount != 1)
-				return false;
-			switch (rt.GetDefinition()?.KnownTypeCode)
-			{
-				case KnownTypeCode.IEnumerableOfT:
-				case KnownTypeCode.ICollectionOfT:
-				case KnownTypeCode.IListOfT:
-				case KnownTypeCode.IReadOnlyCollectionOfT:
-				case KnownTypeCode.IReadOnlyListOfT:
-					return true;
-				default:
-					return false;
-			}
-		}
 		#endregion
 
 		#region MakeUpperBoundInference (§7.5.2.10)
@@ -875,7 +884,7 @@ namespace ICSharpCode.Decompiler.CSharp.Resolver
 				MakeUpperBoundInference(arrU.ElementType, arrV.ElementType);
 				return;
 			}
-			else if (arrV != null && IsGenericInterfaceImplementedByArray(pU) && arrV.Dimensions == 1)
+			else if (arrV != null && pU.IsArrayInterfaceType() && arrV.Dimensions == 1)
 			{
 				MakeUpperBoundInference(pU.GetTypeArgument(0), arrV.ElementType);
 				return;

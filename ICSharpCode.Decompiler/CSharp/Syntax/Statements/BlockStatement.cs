@@ -1,4 +1,4 @@
-﻿//
+//
 // BlockStatement.cs
 //
 // Author:

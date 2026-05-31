@@ -634,5 +634,22 @@ namespace ICSharpCode.Decompiler {
 			var methodGenArgs = methodSpec?.GenericInstMethodSig?.GenericArguments;
 			return FullNameFactory.MethodFullName(declaringType, method.Name, method.MethodSig, typeGenArgs, methodGenArgs, methodDef, sb.Clear());
 		}
+
+		static readonly UTF8String TaskName = new UTF8String("Task");
+		static readonly UTF8String ValueTaskName = new UTF8String("ValueTask");
+
+		public static bool HasReturnValue(this MethodDef method) {
+			// TODO: Replace this constant when dnlib gets updated.
+			const MethodImplAttributes Async = (MethodImplAttributes)0x2000;
+			if ((method.ImplAttributes & Async) != 0) {
+				var rt = method.ReturnType.RemovePinnedAndModifiers();
+				var tdr = rt.GetScopeTypeDefOrRef();
+				if (tdr is not null && tdr.Namespace == "System.Threading.Tasks" &&
+					(tdr.Name == TaskName || tdr.Name == ValueTaskName)) {
+					return rt is GenericInstSig;
+				}
+			}
+			return method.HasReturnType;
+		}
 	}
 }

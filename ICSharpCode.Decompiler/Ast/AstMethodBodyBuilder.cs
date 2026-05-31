@@ -1026,7 +1026,7 @@ namespace ICSharpCode.Decompiler.Ast {
 					case ILCode.Pop: return arg1;
 					case ILCode.Readonly: return InlineAssembly(byteCode, args);
 				case ILCode.Ret:
-					if (methodDef.ReturnType.RemovePinnedAndModifiers().GetElementType() != ElementType.Void) {
+					if (methodDef.HasReturnValue()) {
 						return new Ast.ReturnStatement { Expression = arg1 };
 					} else {
 						return new Ast.ReturnStatement();

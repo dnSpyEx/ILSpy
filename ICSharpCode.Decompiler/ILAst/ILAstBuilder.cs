@@ -291,7 +291,7 @@ namespace ICSharpCode.Decompiler.ILAst {
 			// Create temporary structure for the stack analysis
 			StackAnalysis_body.Clear();
 			List<Instruction> prefixes = null;
-			var methodHasReturnType = methodDef.HasReturnType;
+			var methodHasReturnType = methodDef.HasReturnValue();
 			var instructions = methodDef.Body.Instructions;
 			int instructionsCount = instructions.Count;
 			var inst = 0 < instructionsCount ? instructions[0] : null;

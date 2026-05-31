@@ -1603,10 +1603,11 @@ namespace ICSharpCode.Decompiler.Disassembler {
 
 			sb.Clear();
 			sb.Append("end of class ");
-			if (type.DeclaringType is not null)
-				sb.Append(type.Name.String);
-			else
-				FullNameFactory.FullNameSB(type, false, null, sb);
+			if (!UTF8String.IsNullOrEmpty(type.Namespace)) {
+				sb.Append(IdentifierEscaper.Escape(type.Namespace));
+				sb.Append('.');
+			}
+			sb.Append(IdentifierEscaper.Escape(type.Name));
 			CloseBlock(bh1, addLineSep, sb.ToString());
 			isInType = oldIsInType;
 		}
@@ -1987,30 +1988,35 @@ namespace ICSharpCode.Decompiler.Disassembler {
 						output.Write("forwarder", BoxedTextColor.Keyword);
 						output.Write(" ", BoxedTextColor.Text);
 					}
-					string exportedTypeFullName;
-					if (exportedType.DeclaringType != null)
-						exportedTypeFullName = exportedType.TypeName.String;
-					else {
-						sb.Clear();
-						exportedTypeFullName = FullNameFactory.FullName(exportedType, false, null, sb);
+
+					if (!UTF8String.IsNullOrEmpty(exportedType.Namespace)) {
+						DisassemblerHelpers.WriteNamespace(output, exportedType.Namespace, exportedType.DefinitionAssembly, sb);
+						output.Write(".", BoxedTextColor.Operator);
 					}
-					output.Write(exportedTypeFullName, CSharpMetadataTextColorProvider.Instance.GetColor(exportedType));
+					output.Write(IdentifierEscaper.Escape(exportedType.Name), exportedType, DecompilerReferenceFlags.None, CSharpMetadataTextColorProvider.Instance.GetColor(exportedType));
+
 					var bh1 = OpenBlock(CodeBracesRangeFlags.OtherBlockBraces);
 					if (exportedType.DeclaringType != null) {
 						output.Write(".class", BoxedTextColor.ILDirective);
 						output.Write(" ", BoxedTextColor.Text);
 						output.Write("extern", BoxedTextColor.Keyword);
 						output.Write(" ", BoxedTextColor.Text);
-						sb.Clear();
-						output.WriteLine(DisassemblerHelpers.Escape(FullNameFactory.FullName(exportedType.DeclaringType, false, null, sb)), CSharpMetadataTextColorProvider.Instance.GetColor(exportedType.DeclaringType));
+
+						var declType = exportedType.DeclaringType;
+						if (!UTF8String.IsNullOrEmpty(declType.Namespace)) {
+							DisassemblerHelpers.WriteNamespace(output, declType.Namespace, declType.DefinitionAssembly, sb);
+							output.Write(".", BoxedTextColor.Operator);
+						}
+						output.Write(IdentifierEscaper.Escape(declType.Name), declType, DecompilerReferenceFlags.None, CSharpMetadataTextColorProvider.Instance.GetColor(declType));
 					}
 					else {
 						output.Write(".assembly", BoxedTextColor.ILDirective);
 						output.Write(" ", BoxedTextColor.Text);
 						output.Write("extern", BoxedTextColor.Keyword);
 						output.Write(" ", BoxedTextColor.Text);
-						output.WriteLine(DisassemblerHelpers.Escape(exportedType.Scope.GetScopeName()), BoxedTextColor.Text);
+						output.Write(DisassemblerHelpers.Escape(exportedType.Scope.GetScopeName()), exportedType.Scope, DecompilerReferenceFlags.None, BoxedTextColor.Text);
 					}
+					output.WriteLine();
 					CloseBlock(bh1);
 				}
 			}

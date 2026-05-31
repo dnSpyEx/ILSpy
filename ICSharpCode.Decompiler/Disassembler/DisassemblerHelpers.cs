@@ -627,6 +627,9 @@ namespace ICSharpCode.Decompiler.Disassembler {
 				if (type.DeclaringType != null) {
 					type.DeclaringType.WriteTo(writer, sb, ILNameSyntax.TypeName, ThreeState.Unknown, depth);
 					writer.Write("/", BoxedTextColor.Operator);
+					WriteNamespace(writer, type.Namespace, type.DefinitionAssembly, sb);
+					if (!string.IsNullOrEmpty(type.Namespace))
+						writer.Write(".", BoxedTextColor.Operator);
 					writer.Write(Escape(typeName), type, DecompilerReferenceFlags.None, CSharpMetadataTextColorProvider.Instance.GetColor(type));
 				} else {
 					if (!(type is TypeDef) && type.Scope != null) {

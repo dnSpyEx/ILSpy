@@ -1,4 +1,4 @@
-// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
+﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -373,11 +373,12 @@ namespace ICSharpCode.Decompiler.Disassembler {
 			if (string.IsNullOrEmpty(identifier))
 				return false;
 
-			if (char.IsDigit(identifier[0]))
+			char c = identifier[0];
+			if (char.IsDigit(c))
 				return false;
 
 			// As a special case, .ctor and .cctor are valid despite starting with a dot
-			if (identifier[0] == '.')
+			if (c == '.')
 				return identifier == ".ctor" || identifier == ".cctor";
 
 			if (identifier.Contains(".."))
@@ -469,23 +470,18 @@ namespace ICSharpCode.Decompiler.Disassembler {
 			} else if (type is ArraySig arraySig) {
 				arraySig.Next.WriteTo(writer, sb, syntaxForElementTypes, depth);
 				var bh1 = BracePairHelper.Create(writer, "[", CodeBracesRangeFlags.SquareBrackets);
-				for (int i = 0; i < arraySig.Rank; i++)
-				{
-					if (i != 0) {
+				for (int i = 0; i < arraySig.Rank; i++) {
+					if (i > 0) {
 						writer.Write(",", BoxedTextColor.Punctuation);
 						writer.Write(" ", BoxedTextColor.Text);
 					}
-					int? lower = i < arraySig.LowerBounds.Count ? arraySig.LowerBounds[i] : null;
-					uint? size = i < arraySig.Sizes.Count ? arraySig.Sizes[i] : null;
-					if (lower != null)
-					{
+
+					if (i < arraySig.LowerBounds.Count || i < arraySig.Sizes.Count) {
+						int lower = i < arraySig.LowerBounds.Count ? arraySig.LowerBounds[i] : 0;
 						writer.Write(lower.ToString(), BoxedTextColor.Number);
-						if (size != null) {
-							writer.Write("..", BoxedTextColor.Operator);
-							writer.Write((lower.Value + (int)size.Value - 1).ToString(), BoxedTextColor.Number);
-						}
-						else
-							writer.Write("...", BoxedTextColor.Operator);
+						writer.Write("...", BoxedTextColor.Operator);
+						if (i < arraySig.Sizes.Count)
+							writer.Write((lower + (int)arraySig.Sizes[i] - 1).ToString(), BoxedTextColor.Number);
 					}
 				}
 				bh1.Write("]");
@@ -545,6 +541,29 @@ namespace ICSharpCode.Decompiler.Disassembler {
 			else if (type is FnPtrSig fnPtrSig) {
 				writer.Write("method", BoxedTextColor.Keyword);
 				writer.Write(" ", BoxedTextColor.Text);
+				if (fnPtrSig.MethodSig.ExplicitThis) {
+					writer.Write("instance", BoxedTextColor.Keyword);
+					writer.Write(" ", BoxedTextColor.Text);
+					writer.Write("explicit", BoxedTextColor.Keyword);
+					writer.Write(" ", BoxedTextColor.Text);
+				} else if (fnPtrSig.MethodSig.HasThis) {
+					writer.Write("instance", BoxedTextColor.Keyword);
+					writer.Write(" ", BoxedTextColor.Text);
+				}
+				var callingConvention = fnPtrSig.MethodSig.CallingConvention & CallingConvention.Mask;
+				if (callingConvention != CallingConvention.Default) {
+					var callConv = callingConvention switch {
+						CallingConvention.C => "unmanaged cdecl",
+						CallingConvention.StdCall => "unmanaged stdcall",
+						CallingConvention.ThisCall => "unmanaged thiscall",
+						CallingConvention.FastCall => "unmanaged fastcall",
+						CallingConvention.VarArg => "vararg",
+						CallingConvention.Unmanaged => "unmanaged",
+						_ => callingConvention.ToString().ToLowerInvariant()
+					};
+					writer.Write(callConv, BoxedTextColor.Keyword);
+					writer.Write(" ", BoxedTextColor.Text);
+				}
 				fnPtrSig.MethodSig.RetType.WriteTo(writer, sb, syntax, depth);
 				writer.Write(" ", BoxedTextColor.Text);
 				writer.Write("*", BoxedTextColor.Operator);
@@ -609,6 +628,9 @@ namespace ICSharpCode.Decompiler.Disassembler {
 				if (type.DeclaringType != null) {
 					type.DeclaringType.WriteTo(writer, sb, ILNameSyntax.TypeName, ThreeState.Unknown, depth);
 					writer.Write("/", BoxedTextColor.Operator);
+					WriteNamespace(writer, type.Namespace, type.DefinitionAssembly, sb);
+					if (!string.IsNullOrEmpty(type.Namespace))
+						writer.Write(".", BoxedTextColor.Operator);
 					writer.Write(Escape(typeName), type, DecompilerReferenceFlags.None, CSharpMetadataTextColorProvider.Instance.GetColor(type));
 				} else {
 					if (!(type is TypeDef) && type.Scope != null) {
@@ -733,7 +755,7 @@ namespace ICSharpCode.Decompiler.Disassembler {
 				int end = writer.NextPosition;
 				writer.AddBracePair(new TextSpan(start, 1), new TextSpan(end - 1, 1), CodeBracesRangeFlags.DoubleQuotes);
 			} else if (operand is char c) {
-				writer.Write(numberFormatter.Format((int)c), BoxedTextColor.Number);
+				writer.Write(numberFormatter.Format((int)c), (int)c, numberFlags, BoxedTextColor.Number);
 			} else if (operand is float f) {
 				if (f == 0) {
 					if (1 / f == float.NegativeInfinity) {

@@ -31,8 +31,6 @@
     <NoWarn>$(NoWarn);1701;1702;1591;1573</NoWarn>
     <WarningsAsErrors>nullable</WarningsAsErrors>
     <NoWarn>CA1033;CA2002</NoWarn>
-
-    <CodeAnalysisRuleSet>ICSharpCode.Decompiler.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
 
   <ItemGroup>
@@ -60,10 +58,8 @@
   <ItemGroup>
     <!--Versions must match the Roslyn packages' references-->
     <PackageReference Include="Humanizer.Core" Version="2.14.1" />
-    <PackageReference Include="System.Collections.Immutable" Version="9.0.0" />
-    <!-- Hack to esnure the correct version of System.Memory get's copied to the output folder -->
-    <PackageReference Include="System.Memory" Version="4.5.5" />
-    <PackageReference Include="System.Reflection.Metadata" Version="9.0.0" />
+    <PackageReference Include="System.Collections.Immutable" Version="$(SCImmutableVersion)" />
+    <PackageReference Include="System.Reflection.Metadata" Version="10.0.9" />
     <ProjectReference Include="..\..\..\..\dnSpy\dnSpy.Contracts.Logic\dnSpy.Contracts.Logic.csproj" />
   </ItemGroup>
 </Project>

@@ -1046,10 +1046,6 @@ namespace ICSharpCode.NRefactory.VB.Visitors {
 					exit.ExitKind = ExitKind.Select;
 					break;
 				}
-				if (stmt is CSharp.TryCatchStatement) {
-					exit.ExitKind = ExitKind.Try;
-					break;
-				}
 			}
 
 			return EndNode(breakStatement, exit);

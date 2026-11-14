@@ -2386,6 +2386,14 @@ namespace ICSharpCode.Decompiler.Ast {
 							argVal = Convert.ToUInt64(utf8String2.String);
 						}
 					}
+					else if (argument.Value is string str) {
+						try {
+							argVal = Convert.ToInt64(str);
+						}
+						catch (OverflowException) {
+							argVal = Convert.ToUInt64(str);
+						}
+					}
 					else
 						argVal = argument.Value;
 					long val = (long)CSharpPrimitiveCast.Cast(TypeCode.Int64, argVal, false);

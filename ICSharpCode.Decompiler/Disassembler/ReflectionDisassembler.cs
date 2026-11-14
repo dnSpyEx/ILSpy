@@ -564,11 +564,11 @@ namespace ICSharpCode.Decompiler.Disassembler {
 			output.Write(" ", BoxedTextColor.Text);
 			output.Write("=", BoxedTextColor.Operator);
 			output.Write(" ", BoxedTextColor.Text);
-			if (na.Argument.Value is UTF8String) {
+			if (na.Argument.Value is UTF8String || na.Argument.Value is string) {
 				// secdecls use special syntax for strings
 				output.Write("string", BoxedTextColor.Keyword);
 				var bh1 = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
-				output.Write(string.Format("'{0}'", NRefactory.CSharp.TextWriterTokenWriter.ConvertStringMaxLength((UTF8String)na.Argument.Value, options.MaxStringLength).Replace("'", "\'")), BoxedTextColor.String);
+				output.Write(string.Format("'{0}'", NRefactory.CSharp.TextWriterTokenWriter.ConvertStringMaxLength(na.Argument.Value as UTF8String ?? na.Argument.Value as string, options.MaxStringLength).Replace("'", "\'")), BoxedTextColor.String);
 				bh1.Write(")");
 			} else {
 				WriteConstant(na.Argument.Value);

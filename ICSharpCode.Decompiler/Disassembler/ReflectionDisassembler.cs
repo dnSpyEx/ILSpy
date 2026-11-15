@@ -544,34 +544,129 @@ namespace ICSharpCode.Decompiler.Disassembler {
 					reference = attrType.FindProperty(na.Name, PropertySig.CreateInstance(na.Type));
 			}
 
-			TypeSig type = na.Argument.Type;
-			if (type != null && (type.ElementType == ElementType.Class || type.ElementType == ElementType.ValueType)) {
-				output.Write("enum", BoxedTextColor.Keyword);
-				output.Write(" ", BoxedTextColor.Text);
-				if (type.Scope != type.Module) {
-					output.Write("class", BoxedTextColor.Keyword);
-					output.Write(" ", BoxedTextColor.Text);
-					sb.Clear();
-					output.Write(DisassemblerHelpers.Escape(FullNameFactory.AssemblyQualifiedName(type, null, sb)), BoxedTextColor.Text);
-				} else {
-					type.WriteTo(output, sb, ILNameSyntax.TypeName);
-				}
-			} else {
-				type.WriteTo(output, sb);
-			}
+			WriteCAType(na.Argument.Type);
 			output.Write(" ", BoxedTextColor.Text);
 			output.Write(DisassemblerHelpers.Escape(na.Name), reference, DecompilerReferenceFlags.None, na.IsField ? BoxedTextColor.InstanceField : BoxedTextColor.InstanceProperty);
 			output.Write(" ", BoxedTextColor.Text);
 			output.Write("=", BoxedTextColor.Operator);
 			output.Write(" ", BoxedTextColor.Text);
-			if (na.Argument.Value is UTF8String || na.Argument.Value is string) {
-				// secdecls use special syntax for strings
-				output.Write("string", BoxedTextColor.Keyword);
+			WriteCAArgument(na.Argument);
+		}
+
+		void WriteCAType(TypeSig type) {
+			var isArray = type is SZArraySig;
+			if (isArray)
+				type = type.Next;
+
+			if (type is not null) {
+				if (type.FullName == "System.Type") {
+					DisassemblerHelpers.WriteKeyword(output, "type", type.ToTypeDefOrRef());
+				}
+				else if (type.FullName == "System.Object") {
+					DisassemblerHelpers.WriteKeyword(output, "object", type.ToTypeDefOrRef());
+				}
+				else if (type.ElementType == ElementType.Class || type.ElementType == ElementType.ValueType) {
+					output.Write("enum", BoxedTextColor.Keyword);
+					output.Write(" ", BoxedTextColor.Text);
+					if (type.Scope != type.Module) {
+						output.Write("class", BoxedTextColor.Keyword);
+						output.Write(" ", BoxedTextColor.Text);
+						sb.Clear();
+						output.Write(DisassemblerHelpers.Escape(FullNameFactory.AssemblyQualifiedName(type, new FullNameFactoryHelper(type.Module), sb)), type.ToTypeDefOrRef(), DecompilerReferenceFlags.None, BoxedTextColor.Text);
+					} else {
+						type.WriteTo(output, sb, ILNameSyntax.TypeName);
+					}
+				}
+				else {
+					var name = DisassemblerHelpers.PrimitiveTypeName(type.FullName, options.OwnerModule, out _);
+					if (name is not null)
+						DisassemblerHelpers.WriteKeyword(output, name, type.ToTypeDefOrRef());
+					else
+						type.WriteTo(output, sb, ILNameSyntax.TypeName);
+				}
+			}
+			if (isArray) {
+				var bh = BracePairHelper.Create(output, "[", CodeBracesRangeFlags.SquareBrackets);
+				bh.Write("]");
+			}
+		}
+
+		sealed class FullNameFactoryHelper : IFullNameFactoryHelper {
+			private readonly ModuleDef module;
+
+			public FullNameFactoryHelper(ModuleDef module) => this.module = module;
+
+			public bool MustUseAssemblyName(IType type) => FullNameFactory.MustUseAssemblyName(module, type, false);
+		}
+
+		void WriteCAArgument(CAArgument arg) {
+			if (arg.Value is CAArgument boxedArg) {
+				DisassemblerHelpers.WriteKeyword(output, "object", options.OwnerModule.CorLibTypes.Object.ToTypeDefOrRef());
+				var bh = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
+				WriteCAArgument(boxedArg);
+				bh.Write(")");
+			}
+			else if (arg.Value is IList<CAArgument> array) {
+				WriteCAType(arg.Type.Next);
+
+				var bh = BracePairHelper.Create(output, "[", CodeBracesRangeFlags.SquareBrackets);
+				output.Write(numberFormatter.Format(array.Count), array.Count, numberFlags, BoxedTextColor.Number);
+				bh.Write("]");
+
+				bh = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
+
+				for (int i = 0; i < array.Count; i++) {
+					if (i > 0) {
+						output.Write(" ", BoxedTextColor.Text);
+					}
+					WriteCAArgument(array[i]);
+				}
+
+				bh.Write(")");
+			}
+			else if (arg.Value is UTF8String || arg.Value is string) {
+				string str = arg.Value as UTF8String ?? (string)arg.Value;
+
+				DisassemblerHelpers.WriteKeyword(output, "string", options.OwnerModule.CorLibTypes.String.ToTypeDefOrRef());
 				var bh1 = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
-				output.Write(string.Format("'{0}'", NRefactory.CSharp.TextWriterTokenWriter.ConvertStringMaxLength(na.Argument.Value as UTF8String ?? na.Argument.Value as string, options.MaxStringLength).Replace("'", "\'")), BoxedTextColor.String);
+				output.Write($"'{NRefactory.CSharp.TextWriterTokenWriter.ConvertStringMaxLength(str, options.MaxStringLength).Replace("'", "\'")}'", BoxedTextColor.String);
 				bh1.Write(")");
-			} else {
-				WriteConstant(na.Argument.Value);
+			}
+			else if (arg.Value is TypeSig type) {
+				WriteCAType(arg.Type);
+				var bh1 = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
+				output.Write("class", BoxedTextColor.Keyword);
+				output.Write(" ", BoxedTextColor.Text);
+				sb.Clear();
+				output.Write(DisassemblerHelpers.Escape(FullNameFactory.AssemblyQualifiedName(type, new FullNameFactoryHelper(type.Module), sb)), type.ToTypeDefOrRef(), DecompilerReferenceFlags.None, BoxedTextColor.Text);
+				bh1.Write(")");
+			}
+			else if (arg.Value is null) {
+				WriteCAType(arg.Type);
+				var bh1 = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
+				output.Write("nullref", BoxedTextColor.Keyword);
+				bh1.Write(")");
+			}
+			else {
+				string typeName = DisassemblerHelpers.PrimitiveTypeName(arg.Value.GetType().FullName, options.OwnerModule, out var typeSig);
+				if (typeName != null) {
+					DisassemblerHelpers.WriteKeyword(output, typeName, typeSig.ToTypeDefOrRef());
+					var bh1 = BracePairHelper.Create(output, "(", CodeBracesRangeFlags.Parentheses);
+					if (arg.Value is float cf && (float.IsNaN(cf) || float.IsInfinity(cf))) {
+						uint asUint32 = BitConverter.ToUInt32(BitConverter.GetBytes(cf), 0);
+						output.Write(numberFormatter.Format(asUint32), asUint32, numberFlags, BoxedTextColor.Number);
+					}
+					else if (arg.Value is double cd && (double.IsNaN(cd) || double.IsInfinity(cd))) {
+						ulong asUlong = (ulong)BitConverter.DoubleToInt64Bits(cd);
+						output.Write(numberFormatter.Format(asUlong), asUlong, numberFlags, BoxedTextColor.Number);
+					}
+					else {
+						DisassemblerHelpers.WriteOperand(output, arg.Value, options.MaxStringLength, numberFormatter, sb);
+					}
+					bh1.Write(")");
+				} else {
+					DisassemblerHelpers.WriteOperand(output, arg.Value, options.MaxStringLength, numberFormatter, sb);
+				}
 			}
 		}
 

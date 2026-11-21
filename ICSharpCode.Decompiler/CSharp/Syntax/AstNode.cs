@@ -1,5 +1,5 @@
 #nullable enable
-// 
+//
 // AstNode.cs
 //
 // Author:
@@ -367,7 +367,7 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			return new AstNodeCollection<T>(this, role);
 		}
 
-		protected void SetChildByRole<T>(Role<T> role, T newChild) where T : AstNode
+		public void SetChildByRole<T>(Role<T> role, T newChild) where T : AstNode
 		{
 			AstNode oldChild = GetChildByRole(role);
 			if (oldChild.IsNull)
@@ -1041,10 +1041,10 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			return this.StartLocation <= location && location <= this.EndLocation;
 		}
 
-		public override void AddAnnotation(object annotation)
+		public override void AddAnnotation(object? annotation)
 		{
-			if (this.IsNull)
-				throw new InvalidOperationException("Cannot add annotations to the null node");
+			if (this.IsNull || annotation == null)
+				return;
 			base.AddAnnotation(annotation);
 		}
 

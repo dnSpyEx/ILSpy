@@ -479,5 +479,290 @@ namespace ICSharpCode.Decompiler
 					return TypeSystem.KnownTypeCode.None;
 			}
 		}
+
+		public static bool SupportsPrefix(this Instruction instr, Code prefix) {
+			switch (instr.OpCode.Code) {
+				case Code.Cpblk:
+				case Code.Initblk:
+				case Code.Ldobj:
+				case Code.Ldind_I:
+				case Code.Ldind_I1:
+				case Code.Ldind_I2:
+				case Code.Ldind_I4:
+				case Code.Ldind_I8:
+				case Code.Ldind_R4:
+				case Code.Ldind_R8:
+				case Code.Ldind_Ref:
+				case Code.Ldind_U1:
+				case Code.Ldind_U2:
+				case Code.Ldind_U4:
+				case Code.Stobj:
+				case Code.Stind_I:
+				case Code.Stind_I1:
+				case Code.Stind_I2:
+				case Code.Stind_I4:
+				case Code.Stind_I8:
+				case Code.Stind_R4:
+				case Code.Stind_R8:
+				case Code.Stind_Ref:
+				case Code.Ldfld:
+				case Code.Stfld:
+					return prefix == Code.Volatile || prefix == Code.Unaligned;
+				case Code.Ldsfld:
+				case Code.Stsfld:
+					return prefix == Code.Volatile;
+				case Code.Callvirt:
+					return prefix == Code.Constrained || prefix == Code.Tailcall;
+				case Code.Call:
+					if (prefix == Code.Readonly) {
+						return instr.Operand is MemberRef memberRef && memberRef.Name == "Address" &&
+							   memberRef.DeclaringType is TypeSpec typeSpec && typeSpec.TypeSig.RemoveModifiers() is ArraySigBase;
+					}
+					return prefix == Code.Constrained || prefix == Code.Tailcall;
+				case Code.Calli:
+					return prefix == Code.Tailcall;
+				case Code.Ldelema:
+					return prefix == Code.Readonly;
+				case Code.Ldftn:
+					return prefix == Code.Constrained;
+				default:
+					return false;
+			}
+		}
+
+		public static TypeDef ResolveWithinSameModule(this ITypeDefOrRef type) {
+			if (type is null)
+				return null;
+			if (type is TypeDef typeDef)
+				return typeDef;
+
+			var scope = type.Scope;
+			if (scope is null || scope == type.Module)
+				return type.ResolveTypeDef();
+			return null;
+		}
+
+		public static FieldDef ResolveFieldWithinSameModule(this IField field) {
+			if (field is FieldDef fieldDef)
+				return fieldDef;
+
+			if (field is MemberRef memberRef && memberRef.IsFieldRef) {
+				var declType = memberRef.DeclaringType;
+				if (declType is null)
+					return null;
+				var scope = declType.Scope;
+				if (scope is null || scope == memberRef.Module)
+					return memberRef.ResolveField();
+			}
+
+			return null;
+		}
+
+		public static MethodDef ResolveMethodWithinSameModule(this IMethod method) {
+			if (method is MethodSpec spec)
+				method = spec.Method;
+
+			if (method is MethodDef mDef)
+				return mDef;
+
+			if (method is MemberRef memberRef && memberRef.IsMethodRef) {
+				var declType = memberRef.DeclaringType;
+				if (declType is null)
+					return null;
+				var scope = declType.Scope;
+				if (scope is null || scope == memberRef.Module)
+					return memberRef.ResolveMethod();
+			}
+
+			return null;
+		}
+
+		public static bool IsCompilerGeneratedOrIsInCompilerGeneratedClass(this IMemberDef member)
+		{
+			for (int i = 0; i < 50; i++) {
+				if (member == null)
+					break;
+				if (member.IsCompilerGenerated())
+					return true;
+				member = member.DeclaringType;
+			}
+			return false;
+		}
+
+		static readonly UTF8String dynamicCallSiteTypeName = new UTF8String("<>o");
+
+		public static bool IsDynamicCallSiteContainerType(this ITypeDefOrRef type)
+		{
+			if (type == null)
+				return false;
+			return type.Name == dynamicCallSiteTypeName || type.Name.StartsWith("<>o__");
+		}
+
+		public static bool IsLocalFunction(this MethodDef method) {
+			var name = method.Name.String;
+			return name.StartsWith("<", StringComparison.Ordinal) && name.Contains(">g__");
+		}
+
+		public static bool ContainsAnonymousType(this TypeSig type)
+		{
+			return type.ContainsAnonymousType(0);
+		}
+
+		static bool ContainsAnonymousType(this TypeSig type, int depth)
+		{
+			if (depth >= 30)
+				return false;
+			if (type is GenericInstSig git && git.GenericType is not null) {
+				if (IsAnonymousType(git.GenericType.TypeDefOrRef))
+					return true;
+				for (int i = 0; i < git.GenericArguments.Count; i++) {
+					if (git.GenericArguments[i].ContainsAnonymousType(depth + 1))
+						return true;
+				}
+				return false;
+			}
+			if (type is not null && type.Next is not null)
+				return type.Next.ContainsAnonymousType(depth + 1);
+			return false;
+		}
+
+		public static IList<TypeSig> GetParametersWithoutSentinel(this MethodBaseSig methodSig)
+		{
+			if (methodSig is null)
+				return new List<TypeSig>();
+			if (methodSig.ParamsAfterSentinel is not null)
+				return methodSig.Params.Concat(methodSig.ParamsAfterSentinel).ToList();
+			return methodSig.Params;
+		}
+
+		public static bool IsSystemBoolean(this ITypeDefOrRef type)
+		{
+			if (type == null)
+				return false;
+			if (!type.DefinitionAssembly.IsCorLib())
+				return false;
+
+			return type.Compare(systemString, booleanString);
+		}
+		static readonly UTF8String booleanString = new UTF8String("Boolean");
+		static readonly UTF8String objectString = new UTF8String("Object");
+
+		public static bool IsSystemObject(this ITypeDefOrRef type)
+		{
+			if (type == null)
+				return false;
+			if (!type.DefinitionAssembly.IsCorLib())
+				return false;
+
+			return type.Compare(systemString, objectString);
+		}
+
+		public static IEnumerable<int> GetLengths(this ArraySigBase ary)
+		{
+			var sizes = ary.GetSizes();
+			for (int i = 0; i < (int)ary.Rank; i++)
+				yield return i < sizes.Count ? (int)sizes[i] - 1 : 0;
+		}
+
+		public static string GetMethodSigFullName(MethodSig methodSig)
+		{
+			if (methodSig == null)
+				return string.Empty;
+			var sb = new StringBuilder();
+
+			FullNameFactory.FullNameSB(methodSig.RetType, false, null, null, null, sb);
+			sb.Append('(');
+			PrintArgs(sb, methodSig.Params, true);
+			if (methodSig.ParamsAfterSentinel != null) {
+				if (methodSig.Params.Count > 0)
+					sb.Append(',');
+				sb.Append("...,");
+				PrintArgs(sb, methodSig.ParamsAfterSentinel, false);
+			}
+			sb.Append(')');
+
+			return sb.ToString();
+		}
+
+		static void PrintArgs(StringBuilder sb, IList<TypeSig> args, bool isFirst) {
+			for (int i = 0; i < args.Count; i++) {
+				if (!isFirst)
+					sb.Append(',');
+				isFirst = false;
+				FullNameFactory.FullNameSB(args[i], false, null, null, null, sb);
+			}
+		}
+
+		public static bool HasIsReadOnlyAttribute(IHasCustomAttribute hca) {
+			return hca.IsDefined(systemRuntimeCompilerServicesString, isReadOnlyAttributeString);
+		}
+		static readonly UTF8String isReadOnlyAttributeString = new UTF8String("IsReadOnlyAttribute");
+
+		public static bool HasIsByRefLikeAttribute(IHasCustomAttribute hca) {
+			return hca.IsDefined(systemRuntimeCompilerServicesString, isByRefLikeAttributeString);
+		}
+		static readonly UTF8String isByRefLikeAttributeString = new UTF8String("IsByRefLikeAttribute");
+
+		public static string FullName(this IMethod method, StringBuilder sb) {
+			var methodDef = method as MethodDef;
+			var methodSpec = method as MethodSpec;
+			if (methodSpec is not null)
+				method = methodSpec.Method;
+			var memberRef = method as MemberRef;
+
+			string declaringType;
+			if (memberRef is not null && memberRef.Class is ModuleRef modRef)
+				declaringType = $"[module:{modRef}]<Module>";
+			else
+				declaringType = FullNameFactory.FullName(method.DeclaringType, false, null, sb.Clear());
+
+			var typeGenArgs = ((memberRef?.Class as TypeSpec)?.TypeSig as GenericInstSig)?.GenericArguments;
+			var methodGenArgs = methodSpec?.GenericInstMethodSig?.GenericArguments;
+			return FullNameFactory.MethodFullName(declaringType, method.Name, method.MethodSig, typeGenArgs, methodGenArgs, methodDef, sb.Clear());
+		}
+
+		public static bool IsSignedIntegralType(this TypeSig type)
+		{
+			if (type is null)
+				return false;
+			return type.ElementType == ElementType.I1 ||
+				   type.ElementType == ElementType.I2 ||
+				   type.ElementType == ElementType.I4 ||
+				   type.ElementType == ElementType.I8 ||
+				   type.ElementType == ElementType.I;
+		}
+
+		public static bool IsZero(this object value)
+		{
+			if (value == null)
+				return false;
+			var type = value.GetType();
+			switch (Type.GetTypeCode(type)) {
+				case TypeCode.Empty:		return false;
+				case TypeCode.DBNull:		return false;
+				case TypeCode.Boolean:		return false;
+				case TypeCode.Char:			return (char)value == 0;
+				case TypeCode.SByte:		return (sbyte)value == 0;
+				case TypeCode.Byte:			return (byte)value == 0;
+				case TypeCode.Int16:		return (short)value == 0;
+				case TypeCode.UInt16:		return (ushort)value == 0;
+				case TypeCode.Int32:		return (int)value == 0;
+				case TypeCode.UInt32:		return (uint)value == 0;
+				case TypeCode.Int64:		return (long)value == 0;
+				case TypeCode.UInt64:		return (ulong)value == 0;
+				case TypeCode.Single:		return (float)value == 0;
+				case TypeCode.Double:		return (double)value == 0;
+				case TypeCode.Decimal:		return (decimal)value == 0;
+				case TypeCode.DateTime:		return false;
+				case TypeCode.String:		return false;
+				default:					return false;
+				case TypeCode.Object:
+					if (value is IntPtr ip)
+						return ip == IntPtr.Zero;
+					if (value is UIntPtr uip)
+						return uip == UIntPtr.Zero;
+					return false;
+			}
+		}
 	}
 }

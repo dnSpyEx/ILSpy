@@ -3351,7 +3351,7 @@ namespace ICSharpCode.Decompiler.CSharp.OutputVisitor
 					WriteToken(Roles.Assign, BoxedTextColor.Operator);
 					Space(policy.SpaceAroundAssignment);
 					propertyDeclaration.Initializer.AcceptVisitor(this);
-					Semicolon();
+					WriteToken(Roles.Semicolon, BoxedTextColor.Punctuation);
 				}
 				else
 				{

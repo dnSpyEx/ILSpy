@@ -2518,6 +2518,32 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		[Category("DecompilerSettings.Legacy")]
+		[Description("DecompilerSettings.RemoveNewDelegateClass")]
+		public bool RemoveNewDelegateClass {
+			get { return removeNewDelegateClass; }
+			set {
+				if (removeNewDelegateClass != value) {
+					removeNewDelegateClass = value;
+					OnPropertyChanged(nameof(RemoveNewDelegateClass));
+				}
+			}
+		}
+		bool removeNewDelegateClass = true;
+
+		[Category("DecompilerSettings.Legacy")]
+		[Description("DecompilerSettings.EmitCalliAsInvocationExpression")]
+		public bool EmitCalliAsInvocationExpression {
+			get { return emitCalliAsInvocationExpression; }
+			set {
+				if (emitCalliAsInvocationExpression != value) {
+					emitCalliAsInvocationExpression = value;
+					OnPropertyChanged(nameof(EmitCalliAsInvocationExpression));
+				}
+			}
+		}
+		bool emitCalliAsInvocationExpression = false;
+
 		CSharpFormattingOptions csharpFormattingOptions;
 
 		[Browsable(false)]
@@ -2683,6 +2709,8 @@ namespace ICSharpCode.Decompiler
 			if (FullyQualifyAmbiguousTypeNames != other.FullyQualifyAmbiguousTypeNames) return false;
 			if (FullyQualifyAllTypes != other.FullyQualifyAllTypes) return false;
 			if (AlwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject != other.AlwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject) return false;
+			if (RemoveNewDelegateClass != other.RemoveNewDelegateClass) return false;
+			if (EmitCalliAsInvocationExpression != other.EmitCalliAsInvocationExpression) return false;
 
 			//TODO: CSharpFormattingOptions. This isn't currently used but it has a ton of properties
 
@@ -2819,6 +2847,8 @@ namespace ICSharpCode.Decompiler
 				hashCode = (hashCode * 397) ^ fullyQualifyAmbiguousTypeNames.GetHashCode();
 				hashCode = (hashCode * 397) ^ fullyQualifyAllTypes.GetHashCode();
 				hashCode = (hashCode * 397) ^ alwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject.GetHashCode();
+				hashCode = (hashCode * 397) ^ removeNewDelegateClass.GetHashCode();
+				hashCode = (hashCode * 397) ^ emitCalliAsInvocationExpression.GetHashCode();
 				//TODO: CSharpFormattingOptions
 				// ReSharper enable NonReadonlyMemberInGetHashCode
 				return hashCode;
@@ -2952,6 +2982,8 @@ namespace ICSharpCode.Decompiler
 			other.FullyQualifyAmbiguousTypeNames = this.FullyQualifyAmbiguousTypeNames;
 			other.FullyQualifyAllTypes = this.FullyQualifyAllTypes;
 			other.AlwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject = this.AlwaysGenerateExceptionVariableForCatchBlocksUnlessTypeIsObject;
+			other.RemoveNewDelegateClass = this.RemoveNewDelegateClass;
+			other.EmitCalliAsInvocationExpression = this.EmitCalliAsInvocationExpression;
 			//TODO: CSharpFormattingOptions
 			return other;
 		}

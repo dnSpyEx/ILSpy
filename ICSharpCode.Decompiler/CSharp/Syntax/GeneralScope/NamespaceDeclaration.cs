@@ -123,6 +123,21 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			}
 		}
 
+		public IEnumerable<Identifier> IdentifierTypes {
+			get {
+				var result = new Stack<Identifier>();
+				AstType type = NamespaceName;
+				while (type is MemberType) {
+					var mt = (MemberType)type;
+					result.Push(mt.MemberNameToken);
+					type = mt.Target;
+				}
+				if (type is SimpleType)
+					result.Push(((SimpleType)type).IdentifierToken);
+				return result;
+			}
+		}
+
 		public CSharpTokenNode LBraceToken {
 			get { return GetChildByRole(Roles.LBrace); }
 		}

@@ -127,8 +127,7 @@ namespace ICSharpCode.Decompiler
 			if (memberRef == null)
 				return null;
 
-			if (context.Settings.AutomaticEvents && memberRef is FieldDef) {
-				var field = (FieldDef)memberRef;
+			if (context.Settings.AutomaticEvents && memberRef is FieldDef field) {
 				return field.DeclaringType.FindEvent(field.Name) ?? memberRef;
 			}
 

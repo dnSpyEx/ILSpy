@@ -56,6 +56,10 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			}
 		}
 
+		public Identifier AliasToken {
+			get { return GetChildByRole (AliasRole); }
+		}
+
 		public CSharpTokenNode AssignToken {
 			get { return GetChildByRole(Roles.Assign); }
 		}

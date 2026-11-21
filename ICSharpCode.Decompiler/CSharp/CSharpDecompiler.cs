@@ -2222,7 +2222,7 @@ namespace ICSharpCode.Decompiler.CSharp
 				typeIndex++;
 				// by reference type cannot be represented in C#; so we'll represent it as a pointer instead
 				return ConvertType((type as ByRefSig).Next, typeAttributes, ref typeIndex, options, depth, sb)
-					.MakePointerType();
+					.MakeRefType();
 			} else if (type is PtrSig) {
 				typeIndex++;
 				return ConvertType((type as PtrSig).Next, typeAttributes, ref typeIndex, options, depth, sb)

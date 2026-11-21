@@ -222,5 +222,47 @@ namespace ICSharpCode.Decompiler.CSharp.Syntax
 			}
 			return type;
 		}
+
+		#region Legacy Builder methods
+		/// <summary>
+		/// Builds an expression that can be used to access a static member on this type.
+		/// </summary>
+		public MemberReferenceExpression Member(string memberName, object memberAnnotation)
+		{
+			return new TypeReferenceExpression { Type = this }.Member(memberName, memberAnnotation);
+		}
+
+		/// <summary>
+		/// Builds an invocation expression using this type as target.
+		/// </summary>
+		public InvocationExpression Invoke(object annotation, string methodName, IEnumerable<Expression> arguments)
+		{
+			return new TypeReferenceExpression { Type = this }.Invoke(annotation, methodName, arguments);
+		}
+
+		/// <summary>
+		/// Builds an invocation expression using this type as target.
+		/// </summary>
+		public InvocationExpression Invoke(string methodName, params Expression[] arguments)
+		{
+			return new TypeReferenceExpression { Type = this }.Invoke(methodName, arguments);
+		}
+
+		/// <summary>
+		/// Builds an invocation expression using this type as target.
+		/// </summary>
+		public InvocationExpression Invoke2(object annotation, string methodName, params Expression[] arguments)
+		{
+			return new TypeReferenceExpression { Type = this }.Invoke2(annotation, methodName, arguments);
+		}
+
+		/// <summary>
+		/// Builds an invocation expression using this type as target.
+		/// </summary>
+		public InvocationExpression Invoke(object annotation, string methodName, IEnumerable<AstType> typeArguments, IEnumerable<Expression> arguments)
+		{
+			return new TypeReferenceExpression { Type = this }.Invoke(annotation, methodName, typeArguments, arguments);
+		}
+		#endregion
 	}
 }
